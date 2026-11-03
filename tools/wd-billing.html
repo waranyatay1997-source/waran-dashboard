@@ -48,7 +48,7 @@
       <div class="spacer"></div>
       <button class="btn" id="export" disabled>Export to .xlsx</button>
     </div>
-    <div class="status" id="status">ยังไม่ได้เลือกโฟลเดอร์</div>
+    <div class="status" id="status">No folder selected</div>
     <div class="current" id="current"></div>
     <div class="missing" id="missing"></div>
     <div class="errors" id="errors"></div>
@@ -56,7 +56,7 @@
 
   <div class="card">
     <div class="summary" id="summary"></div>
-    <div class="table-scroll" id="out"><div class="empty">ผลลัพธ์จะแสดงที่นี่ระหว่างอ่านไฟล์</div></div>
+    <div class="table-scroll" id="out"><div class="empty">Results will appear here while files are read</div></div>
   </div>
 </div>
 
@@ -129,14 +129,14 @@
 
   function updateStatus(prefix) {
     $("status").innerHTML =
-      `${prefix}<br>สแกนแล้ว <b>${fmt(S.scanned)}</b> รายการ · พบไฟล์ที่ตรงเงื่อนไข <b>${fmt(S.matched)}</b> ไฟล์ · ` +
-      `อ่านเสร็จ <b>${fmt(S.filesDone)}</b> ไฟล์ · ${fmt(S.sheets)} ชีท · ${fmt(S.records.length)} แถวข้อมูล`;
+      `${prefix}<br>Scanned <b>${fmt(S.scanned)}</b> items · matched files <b>${fmt(S.matched)}</b> · ` +
+      `Read <b>${fmt(S.filesDone)}</b> files · ${fmt(S.sheets)} sheets · ${fmt(S.records.length)} data rows`;
   }
 
   function renderMissing() {
     if (!S || !S.missingDays.length) { $("missing").textContent = ""; return; }
     const list = [...S.missingDays].sort((a, b) => a.localeCompare(b, "en"));
-    $("missing").textContent = `ไม่พบไฟล์ Loadplan ใน ${list.length} โฟลเดอร์: ${list.join(", ")}`;
+    $("missing").textContent = `No Loadplan file in ${list.length} folder(s): ${list.join(", ")}`;
   }
 
   async function readMatchedFile(entry, folder) {
@@ -164,14 +164,14 @@
         if (entry.kind !== "file") continue;
         S.scanned++;
         if (!isTarget(entry.name)) {
-          if (S.scanned % PROGRESS_EVERY === 0) updateStatus("กำลังสแกนโฟลเดอร์...");
+          if (S.scanned % PROGRESS_EVERY === 0) updateStatus("Scanning folders...");
           continue;
         }
         found++;
         S.matched++;
         S.current = `${folder}/${entry.name}`;
-        $("current").textContent = "กำลังอ่าน: " + S.current;
-        updateStatus("กำลังอ่านไฟล์...");
+        $("current").textContent = "Reading: " + S.current;
+        updateStatus("Reading files...");
         try {
           await readMatchedFile(entry, folder);
         } catch (err) {
@@ -179,7 +179,7 @@
           $("errors").textContent = S.errors.join("\n");
         }
         S.filesDone++;
-        if (S.filesDone % RENDER_EVERY === 0) { renderPreview(); updateStatus("กำลังอ่านไฟล์..."); }
+        if (S.filesDone % RENDER_EVERY === 0) { renderPreview(); updateStatus("Reading files..."); }
       }
       if (found === 0) {
         S.missingDays.push(folder);
@@ -199,16 +199,16 @@
     $("current").textContent = "";
     $("missing").textContent = "";
     setRunning(true);
-    updateStatus("เริ่มค้นหาไฟล์...");
+    updateStatus("Searching for files...");
 
     await scanMonth(root);
 
     setRunning(false);
     $("current").textContent = "";
-    updateStatus(stopRequested ? "<b>หยุดแล้ว</b> (ผลลัพธ์เท่าที่อ่านได้)" : "<b>อ่านเสร็จแล้ว</b>");
+    updateStatus(stopRequested ? "<b>Stopped</b> (results read so far)" : "<b>Finished reading</b>");
     renderMissing();
     if (!S.records.length) {
-      $("out").innerHTML = '<div class="empty">ไม่พบไฟล์ที่ตรงเงื่อนไข หรือไม่มีชีท Preview Data</div>';
+      $("out").innerHTML = '<div class="empty">No matching files found, or no 'Preview Data' sheet</div>';
       $("summary").textContent = "";
     } else {
       renderPreview();
@@ -216,16 +216,16 @@
     $("clear").disabled = false;
   });
 
-  $("stop").addEventListener("click", () => { stopRequested = true; $("status").innerHTML += "<br>กำลังหยุด..."; });
+  $("stop").addEventListener("click", () => { stopRequested = true; $("status").innerHTML += "<br>Stopping..."; });
 
   $("clear").addEventListener("click", () => {
     S = null;
-    $("status").textContent = "ยังไม่ได้เลือกโฟลเดอร์";
+    $("status").textContent = "No folder selected";
     $("current").textContent = "";
     $("missing").textContent = "";
     $("errors").textContent = "";
     $("summary").textContent = "";
-    $("out").innerHTML = '<div class="empty">ผลลัพธ์จะแสดงที่นี่ระหว่างอ่านไฟล์</div>';
+    $("out").innerHTML = '<div class="empty">Results will appear here while files are read</div>';
     $("clear").disabled = true;
     $("export").disabled = true;
   });
@@ -259,7 +259,7 @@
     colTot.forEach(v => html += `<td>${fmt(v)}</td>`);
     html += `<td>${fmt(grand)}</td></tr></tbody></table>`;
     $("out").innerHTML = html;
-    $("summary").textContent = `โฟลเดอร์: ${S.rootName} · จำนวนรวม ${fmt(grand)} · ${fmt(S.records.length)} แถวข้อมูล · ${new Set(S.records.map(r => r["Folder"])).size} โฟลเดอร์วัน`;
+    $("summary").textContent = `Folder: ${S.rootName} · Total ${fmt(grand)} · ${fmt(S.records.length)} data rows · ${new Set(S.records.map(r => r["Folder"])).size} day folder(s)`;
     $("export").disabled = running;
   }
 

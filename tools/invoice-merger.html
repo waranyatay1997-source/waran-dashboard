@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Invoice Pack Merger - Opmobility</title>
+<title>Invoice - Opmobility</title>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -116,13 +116,13 @@ input{font:inherit}
 </head>
 <body>
 
-<header class="hero"><h1>📑 Invoice Pack Merger - Opmobility</h1></header>
+<header class="hero"><h1>📑 Invoice - Opmobility</h1></header>
 
 <main class="wrap">
   <section class="card toolbar">
     <div class="tb-inv" id="tbInv"></div>
-    <div class="tb-modes"><button class="save-btn" data-act="merge">💾 บันทึก 2 ไฟล์ (Complete + VIM)</button></div>
-    <button class="clear-btn" id="clearBtn" data-act="clear">🗑 ล้างทั้งหมดเพื่อเริ่มชุดใหม่</button>
+    <div class="tb-modes"><button class="save-btn" data-act="merge">💾 Save 2 files (Complete + VIM)</button></div>
+    <button class="clear-btn" id="clearBtn" data-act="clear">🗑 Clear all to start a new set</button>
   </section>
 
   <section class="sections" id="sections"></section>
@@ -136,19 +136,19 @@ input{font:inherit}
 
 <div class="modal" id="modal" hidden>
   <div class="mbox" role="dialog" aria-modal="true">
-    <h3>ตั้งชื่อไฟล์ PDF</h3>
+    <h3>Name the PDF files</h3>
     <p class="muted" id="mSub" style="font-size:13px;color:var(--muted);margin:0"></p>
     <div class="fnrow"><span>INVOICE - </span><input id="invNo" type="text" placeholder="TH02333511" autocomplete="off"></div>
     <div class="fnrow"><span>_INV.</span><input id="invSfx" type="text" placeholder="XXX" autocomplete="off"></div>
-    <div class="ext">ชื่อไฟล์: <b id="fnPreview"></b></div>
+    <div class="ext">File names: <b id="fnPreview"></b></div>
     <div class="mbtns">
-      <button data-act="modalCancel">ยกเลิก</button>
-      <button class="primary" data-act="modalOk">บันทึก PDF</button>
+      <button data-act="modalCancel">Cancel</button>
+      <button class="primary" data-act="modalOk">Save PDF</button>
     </div>
   </div>
 </div>
 
-<div id="busy" hidden><div><div class="spin"></div><p>กำลังรวมไฟล์…</p></div></div>
+<div id="busy" hidden><div><div class="spin"></div><p>Merging files…</p></div></div>
 
 <script>
 /* ===== Embedded quotation (base64 PDF) — always appended last ===== */
@@ -218,31 +218,31 @@ function itemHTML(key, it){
   const thumb = isImg
     ? `<img src="${it.dataUrl}" style="transform:rotate(${angle}deg)" alt="">`
     : `<div class="pdf-ic">PDF</div>`;
-  const sub = isImg ? "รูปภาพ" : `${it.pages} หน้า`;
-  const toggle = isImg ? `<button class="ic" data-act="toggle" data-key="${key}" data-id="${it.id}" title="ปรับมุม">⟳</button>` : "";
+  const sub = isImg ? "Image" : `${it.pages} pages`;
+  const toggle = isImg ? `<button class="ic" data-act="toggle" data-key="${key}" data-id="${it.id}" title="Adjust angle">⟳</button>` : "";
   const ctl = isImg && it.open ? `
     <div class="ctl">
-      <button data-act="rot" data-key="${key}" data-id="${it.id}" data-d="-90" title="หมุนซ้าย">↺</button>
-      <button data-act="rot" data-key="${key}" data-id="${it.id}" data-d="90" title="หมุนขวา">↻</button>
-      <input type="range" min="-30" max="30" step="0.5" value="${it.fine}" data-fine data-key="${key}" data-id="${it.id}" aria-label="ปรับมุมละเอียด">
+      <button data-act="rot" data-key="${key}" data-id="${it.id}" data-d="-90" title="Rotate left">↺</button>
+      <button data-act="rot" data-key="${key}" data-id="${it.id}" data-d="90" title="Rotate right">↻</button>
+      <input type="range" min="-30" max="30" step="0.5" value="${it.fine}" data-fine data-key="${key}" data-id="${it.id}" aria-label="Fine angle">
       <span class="deg">${it.fine>0?"+":""}${it.fine}°</span>
-      <button data-act="reset" data-key="${key}" data-id="${it.id}">รีเซ็ต</button>
+      <button data-act="reset" data-key="${key}" data-id="${it.id}">Reset</button>
     </div>` : "";
   return `<div class="item">
     <div class="row">
       <div class="thumb">${thumb}</div>
       <div class="meta"><div class="fname" title="${esc(it.name)}">${esc(it.name)}</div><div class="sub">${sub}</div></div>
       ${toggle}
-      <button class="x" data-act="rm" data-key="${key}" data-id="${it.id}" title="ลบ">✕</button>
+      <button class="x" data-act="rm" data-key="${key}" data-id="${it.id}" title="Remove">✕</button>
     </div>
     ${ctl}${emailUI(key, it)}
   </div>`;
 }
 function emailUI(key, it){
   if (key !== "invoice" || it.kind !== "pdf" || it.emailPages === undefined) return "";
-  if (it.emailPages === null) return `<div class="hint">ตรวจหน้า EMAIL COPY ไม่ได้ กรุณาตรวจเอง</div>`;
-  if (!it.emailPages.length) return `<div class="hint">ไม่พบหน้า EMAIL COPY</div>`;
-  return `<label class="chk"><input type="checkbox" data-skip data-key="${key}" data-id="${it.id}" ${it.skipEmail?"checked":""}> ตัดหน้า EMAIL COPY ออก (หน้า ${it.emailPages.map(i=>i+1).join(", ")})</label>`;
+  if (it.emailPages === null) return `<div class="hint">Could not check EMAIL COPY pages. Please check manually.</div>`;
+  if (!it.emailPages.length) return `<div class="hint">No EMAIL COPY page found</div>`;
+  return `<label class="chk"><input type="checkbox" data-skip data-key="${key}" data-id="${it.id}" ${it.skipEmail?"checked":""}> Remove EMAIL COPY page(s) (page ${it.emailPages.map(i=>i+1).join(", ")})</label>`;
 }
 
 function renderSections(){
@@ -256,7 +256,7 @@ function renderSections(){
       </header>
       <div class="drop" data-drop="${s.key}">
         <input type="file" multiple accept="application/pdf,image/*" hidden data-input="${s.key}">
-        ลากไฟล์มาวาง หรือ <button class="link" data-act="pick" data-key="${s.key}">เลือกไฟล์</button>
+        Drop files here or <button class="link" data-act="pick" data-key="${s.key}">choose files</button>
       </div>
       <div class="list">${files[s.key].map(it=>itemHTML(s.key,it)).join("")}</div>
     </article>`;
@@ -267,17 +267,17 @@ function renderQuote(){
   const q = quotation;
   $("#quoteCard").innerHTML = `
     <div class="thumb"><div class="pdf-ic">PDF</div></div>
-    <div class="meta"><div class="fname">${esc(q.name)}</div><div class="sub">${q.pages} หน้า · Ref. CBT16032026 REV 06</div></div>
-    <span class="badge-last">ไฟล์สุดท้ายเสมอ</span>
+    <div class="meta"><div class="fname">${esc(q.name)}</div><div class="sub">${q.pages} pages · Ref. CBT16032026 REV 06</div></div>
+    <span class="badge-last">Always last</span>
     <div class="qbtns">
-      <button data-act="pickQuote">เปลี่ยนไฟล์</button>
-      <button data-act="resetQuote">คืนค่าเดิม</button>
+      <button data-act="pickQuote">Replace file</button>
+      <button data-act="resetQuote">Restore default</button>
     </div>`;
 }
 
 function renderToolbar(){
   const inv = ($("#invNo") && $("#invNo").value.trim()) || "";
-  $("#tbInv").innerHTML = inv ? `เลข Invoice: <b>${esc(inv)}</b>` : `ยังไม่มีเลข Invoice (จะดึงให้อัตโนมัติเมื่อลากไฟล์ Invoice)`;
+  $("#tbInv").innerHTML = inv ? `Invoice no.: <b>${esc(inv)}</b>` : `No invoice number yet (it is read automatically when you add an Invoice file)`;
 }
 
 function renderAll(){ renderToolbar(); renderSections(); renderQuote(); }
@@ -306,17 +306,17 @@ async function addFiles(key, list){
           item.skipEmail = !!(sc.emailPages && sc.emailPages.length);
           const fromName = f.name.match(INV_RE);
           const found = (fromName && fromName[1]) || sc.invNo;
-          if (found){ $("#invNo").value = found; updatePreview(); toast(`ตั้งเลข Invoice เป็น ${found}`); }
+          if (found){ $("#invNo").value = found; updatePreview(); toast(`Invoice no. set to ${found}`); }
         }
         files[key].push(item);
       } else if (isImg){
         const dataUrl = await readUrl(f);
         files[key].push({ id:uid(), name:f.name, kind:"image", dataUrl, rot:0, fine:0, open:false });
-      } else { toast(`ไม่รองรับไฟล์: ${f.name}`, "err"); continue; }
+      } else { toast(`Unsupported file: ${f.name}`, "err"); continue; }
       added++;
-    } catch(err){ toast(`อ่านไฟล์ไม่ได้: ${f.name}`, "err"); }
+    } catch(err){ toast(`Could not read file: ${f.name}`, "err"); }
   }
-  if (added) toast(`เพิ่ม ${added} ไฟล์ลง ${sectionTh(key)}`);
+  if (added) toast(`Added ${added} file(s) to ${sectionTh(key)}`);
   renderAll();
 }
 
@@ -375,9 +375,9 @@ async function buildPdf(keys){
 function startMerge(){
   const missing = new Set();
   for (const mk of ["complete","vim"]) MODES[mk].req.forEach(k => { if (!files[k].length) missing.add(sectionTh(k)); });
-  if (missing.size){ toast("ยังไม่มีไฟล์: " + [...missing].join(", "), "err"); return; }
+  if (missing.size){ toast("No files yet: " + [...missing].join(", "), "err"); return; }
   pendingMode = "both";
-  $("#mSub").textContent = "ตั้งชื่อครั้งเดียว ระบบจะบันทึก 2 ไฟล์ให้พร้อมกัน";
+  $("#mSub").textContent = "Name once. Both files will be saved together.";
   updatePreview();
   $("#modal").hidden = false;
   setTimeout(()=>($("#invSfx").value ? $("#invNo") : $("#invSfx")).focus(), 30);
@@ -396,8 +396,8 @@ async function confirmSave(){
   if (!pendingMode) return;
   const inv = ($("#invNo").value || "").trim();
   const sfx = ($("#invSfx").value || "").trim();
-  if (!inv){ toast("กรอกเลข Invoice ก่อน", "err"); $("#invNo").focus(); return; }
-  if (!sfx){ toast("กรอกส่วน _INV.XXX ก่อน", "err"); $("#invSfx").focus(); return; }
+  if (!inv){ toast("Enter the invoice number first", "err"); $("#invNo").focus(); return; }
+  if (!sfx){ toast("Enter the _INV.XXX suffix first", "err"); $("#invSfx").focus(); return; }
   const base = `INVOICE - ${inv}_INV.${sfx}`;
   const jobs = [
     { mode:"complete", name: base },
@@ -412,9 +412,9 @@ async function confirmSave(){
       downloadBytes(await out.save(), j.name);
       await new Promise(r => setTimeout(r, 500));
     }
-    toast("บันทึกแล้ว 2 ไฟล์");
+    toast("Saved 2 files");
   } catch(err){
-    toast("รวมไฟล์ไม่สำเร็จ: " + (err.message || err), "err");
+    toast("Merge failed: " + (err.message || err), "err");
   } finally {
     $("#busy").hidden = true;
   }
@@ -422,10 +422,10 @@ async function confirmSave(){
 
 function clearAll(){
   const btn = $("#clearBtn");
-  const idleText = "🗑 ล้างทั้งหมดเพื่อเริ่มชุดใหม่";
+  const idleText = "🗑 Clear all to start a new set";
   if (!clearArmed){
     clearArmed = true;
-    btn.textContent = "⚠ กดอีกครั้งเพื่อยืนยัน";
+    btn.textContent = "⚠ Click again to confirm";
     btn.classList.add("armed");
     clearTimeout(clearTimer);
     clearTimer = setTimeout(()=>{ clearArmed = false; btn.textContent = idleText; btn.classList.remove("armed"); }, 3000);
@@ -436,7 +436,7 @@ function clearAll(){
   SECTIONS.forEach(s => files[s.key] = []);
   $("#invNo").value = ""; $("#invSfx").value = "";
   renderAll();
-  toast("ล้างแล้ว พร้อมเริ่มชุดใหม่");
+  toast("Cleared. Ready for a new set.");
 }
 
 /* ===== Events ===== */
@@ -453,7 +453,7 @@ document.addEventListener("click", e => {
     case "merge": startMerge(); break;
     case "clear": clearAll(); break;
     case "pickQuote": $("#quoteInput").click(); break;
-    case "resetQuote": quotation = {...DEFAULT_Q, bytes: DEFAULT_Q.bytes.slice(0)}; renderQuote(); toast("คืนใบเสนอราคาเดิมแล้ว"); break;
+    case "resetQuote": quotation = {...DEFAULT_Q, bytes: DEFAULT_Q.bytes.slice(0)}; renderQuote(); toast("Default quotation restored"); break;
     case "modalCancel": closeModal(); break;
     case "modalOk": confirmSave(); break;
   }
@@ -485,8 +485,8 @@ document.addEventListener("change", async e => {
     const f = e.target.files[0];
     try{
       quotation = await loadQuote(f.name, new Uint8Array(await f.arrayBuffer()));
-      toast("เปลี่ยนใบเสนอราคาแล้ว"); renderQuote();
-    } catch(err){ toast("ไฟล์ PDF ไม่ถูกต้อง", "err"); }
+      toast("Quotation replaced"); renderQuote();
+    } catch(err){ toast("Invalid PDF file", "err"); }
     e.target.value = "";
   }
 });

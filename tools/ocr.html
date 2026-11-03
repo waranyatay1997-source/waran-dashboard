@@ -98,21 +98,21 @@
 <body>
 <div class="container">
   <h1>📷 Pallet Label OCR</h1>
-  <p class="subtitle">อัปโหลดรูปถ่าย Label บน Pallet แล้วดึงข้อมูลอัตโนมัติด้วย Claude AI</p>
+  <p class="subtitle">Upload pallet label photos and extract the data automatically with Claude AI</p>
 
   <div class="ocr-drop" id="ocr-drop" onclick="document.getElementById('ocr-file-input').click()">
     <div class="icon">📷</div>
-    <p>คลิกหรือลากไฟล์มาวางที่นี่</p>
-    <small>รองรับ PDF, JPG, PNG — หลายไฟล์พร้อมกัน</small>
+    <p>Click or drag files here</p>
+    <small>Supports PDF, JPG, PNG — multiple files at once</small>
   </div>
   <input type="file" id="ocr-file-input" accept=".pdf,.jpg,.jpeg,.png" multiple style="display:none">
 
   <div class="ocr-thumb-grid" id="ocr-thumb-grid"></div>
 
   <div class="btn-row">
-    <button class="primary" id="ocr-run-btn" disabled onclick="runOCR()">▶ อ่าน OCR</button>
+    <button class="primary" id="ocr-run-btn" disabled onclick="runOCR()">▶ Run OCR</button>
     <button class="export" id="ocr-export-btn" disabled onclick="openExportModal()">⬇ Export Excel (.xlsx)</button>
-    <button onclick="clearOCR()">ล้างทั้งหมด</button>
+    <button onclick="clearOCR()">Clear all</button>
     <button onclick="openApiKeyModal()" style="font-size:12px;color:#888;">🔑 API Key</button>
   </div>
   <div id="ocr-status"></div>
@@ -121,8 +121,8 @@
   </div>
 
   <div id="ocr-results-section" style="display:none; margin-top:1.5rem;">
-    <p class="section-label">ผลลัพธ์ <span id="ocr-row-count" class="badge"></span>
-      <span style="font-size:11px;color:#aaa;margin-left:8px;">คลิกที่ช่องเพื่อแก้ไขได้</span>
+    <p class="section-label">Results <span id="ocr-row-count" class="badge"></span>
+      <span style="font-size:11px;color:#aaa;margin-left:8px;">Click a cell to edit</span>
     </p>
     <div class="table-wrap">
       <table>
@@ -138,21 +138,21 @@
         <tbody id="ocr-results-body"></tbody>
       </table>
     </div>
-    <p class="note">* คลิกที่ช่องในตารางเพื่อแก้ไขก่อน Export</p>
+    <p class="note">* Click a cell in the table to edit before export</p>
   </div>
 </div>
 
 <!-- Export Modal -->
 <div class="modal-overlay" id="export-modal">
   <div class="modal-box">
-    <h2>💾 ตั้งชื่อไฟล์ก่อน Export</h2>
+    <h2>💾 Name the file before export</h2>
     <div class="filename-row">
       <span class="filename-prefix" id="filename-prefix"></span>
-      <input class="filename-suffix" id="filename-suffix" type="text" placeholder="กรอกส่วนท้าย..." />
+      <input class="filename-suffix" id="filename-suffix" type="text" placeholder="Enter suffix..." />
       <span class="filename-ext">.xlsx</span>
     </div>
     <div class="modal-btns">
-      <button onclick="closeExportModal()">ยกเลิก</button>
+      <button onclick="closeExportModal()">Cancel</button>
       <button class="export" onclick="confirmExport()">⬇ Export</button>
     </div>
   </div>
@@ -162,11 +162,11 @@
 <div class="modal-overlay" id="apikey-modal">
   <div class="modal-box">
     <h2>🔑 Claude API Key</h2>
-    <p class="apikey-hint">ใส่ Anthropic Claude API Key (sk-ant-...) จะเก็บไว้ใน browser ไม่ต้องใส่ซ้ำ</p>
+    <p class="apikey-hint">Enter your Anthropic Claude API Key (sk-ant-...). It is stored in this browser, so you don't need to enter it again.</p>
     <input class="apikey-input" id="apikey-input" type="password" placeholder="sk-ant-api03-..." />
     <div class="modal-btns">
-      <button onclick="closeApiKeyModal()">ยกเลิก</button>
-      <button class="primary" onclick="saveApiKey()">บันทึก</button>
+      <button onclick="closeApiKeyModal()">Cancel</button>
+      <button class="primary" onclick="saveApiKey()">Save</button>
     </div>
   </div>
 </div>
@@ -187,7 +187,7 @@ function closeApiKeyModal() { document.getElementById('apikey-modal').classList.
 function saveApiKey() {
   const key = document.getElementById('apikey-input').value.trim();
   if (key) { localStorage.setItem('claude_api_key', key); closeApiKeyModal(); }
-  else { alert('กรุณาใส่ API Key'); }
+  else { alert('Please enter an API Key'); }
 }
 
 // ===================== FILES =====================
@@ -324,7 +324,7 @@ async function runOCR() {
   for (let i = 0; i < ocrFiles.length; i++) {
     const thumb = document.getElementById('thumb-' + i);
     thumb.querySelector('.thumb-status').textContent = '⏳';
-    ocrStatus.textContent = `กำลังอ่าน ${i+1}/${ocrFiles.length}: ${ocrFiles[i].name}`;
+    ocrStatus.textContent = `Reading ${i+1}/${ocrFiles.length}: ${ocrFiles[i].name}`;
     document.getElementById('ocr-bar').style.width = ((i / ocrFiles.length) * 100) + '%';
     try {
       const parsed = await callClaude(ocrFiles[i].dataUrl, apiKey);
@@ -344,7 +344,7 @@ async function runOCR() {
   }
 
   document.getElementById('ocr-bar').style.width = '100%';
-  ocrStatus.textContent = `เสร็จ — อ่านได้ ${ocrResults.length} รูป`;
+  ocrStatus.textContent = `Done — read ${ocrResults.length} image(s)`;
   ocrRunBtn.disabled = false;
   renderResults();
 }
@@ -362,7 +362,7 @@ function renderResults() {
       <td class="editable-cell${warn(r.pk)}"><input value="${r.pk}" oninput="ocrResults[${i}].pk=this.value"></td>`;
     tbody.appendChild(tr);
   });
-  document.getElementById('ocr-row-count').textContent = ocrResults.length + ' รูป';
+  document.getElementById('ocr-row-count').textContent = ocrResults.length + ' image(s)';
   document.getElementById('ocr-results-section').style.display = 'block';
   ocrExportBtn.disabled = ocrResults.length === 0;
 }
