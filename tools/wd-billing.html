@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WD Warehouse billing</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root { --bg:#f5f6f8; --card:#fff; --text:#1f2933; --muted:#6b7785; --border:#d9dee5; --head:#1f4e78; --accent:#2b6cb0; --total:#eef3f9; --danger:#c53030; --warn:#b7791f; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: Arial, "Sarabun", "Noto Sans Thai", sans-serif; background:var(--bg); color:var(--text); }
+  .wrap { max-width:1200px; margin:0 auto; padding:16px; }
+  h1 { font-size:1.4rem; margin:8px 0 16px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px; margin-bottom:16px; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .btn { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:9px 16px; font-size:.95rem; cursor:pointer; }
+  .btn.ghost { background:transparent; color:var(--accent); border:1px solid var(--accent); }
+  .btn.stop { background:var(--danger); }
+  .btn:disabled { opacity:.45; cursor:default; }
+  .spacer { flex:1; }
+  .status { font-size:.9rem; color:var(--muted); margin-top:12px; line-height:1.6; }
+  .status b { color:var(--text); }
+  .current { font-size:.85rem; color:var(--muted); word-break:break-all; margin-top:4px; min-height:1.2em; }
+  .missing { font-size:.9rem; color:var(--warn); margin-top:10px; line-height:1.6; }
+  .errors { color:var(--danger); font-size:.85rem; margin-top:8px; white-space:pre-line; }
+  .summary { color:var(--muted); font-size:.9rem; margin-bottom:8px; }
+  .table-scroll { overflow-x:auto; border:1px solid var(--border); border-radius:8px; }
+  table { border-collapse:collapse; width:100%; font-size:.9rem; }
+  th, td { border-bottom:1px solid var(--border); border-right:1px solid var(--border); padding:7px 10px; text-align:right; white-space:nowrap; }
+  th { background:var(--head); color:#fff; text-align:center; }
+  td.label, th.corner { text-align:left; font-weight:600; }
+  tr.total td, td.total { background:var(--total); font-weight:700; }
+  .empty { text-align:center; color:var(--muted); padding:28px 8px; }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="../theme.css">
+</head>
+<body>
+<div class="wrap">
+  <h1>WD Warehouse billing</h1>
+
+  <div class="card">
+    <div class="row">
+      <button class="btn" id="select">Select folder</button>
+      <button class="btn stop" id="stop" disabled>Stop</button>
+      <button class="btn ghost" id="clear" disabled>Clear</button>
+      <div class="spacer"></div>
+      <button class="btn" id="export" disabled>Export to .xlsx</button>
+    </div>
+    <div class="status" id="status">ยังไม่ได้เลือกโฟลเดอร์</div>
+    <div class="current" id="current"></div>
+    <div class="missing" id="missing"></div>
+    <div class="errors" id="errors"></div>
+  </div>
+
+  <div class="card">
+    <div class="summary" id="summary"></div>
+    <div class="table-scroll" id="out"><div class="empty">ผลลัพธ์จะแสดงที่นี่ระหว่างอ่านไฟล์</div></div>
+  </div>
+</div>
+
+<script>
+  const NAME_KEYS = ["สูตร loadplan", "plan load daily"];
+  const SHEET_RE = /^Preview Data(\s*\(\d+\)|\s+\d+)?$/i;
+  const RENDER_EVERY = 3;     // วาดตารางใหม่ทุกกี่ไฟล์
+  const PROGRESS_EVERY = 100; // อัปเดตจำนวนที่สแกนทุกกี่รายการ
+
+  const $ = id => document.getElementById(id);
+  const norm = s => s.toLowerCase().replace(/_/g, " ").replace(/\s+/g, " ").trim();
+  const isTarget = name => /\.(xlsx|xlsm)$/i.test(name) && !name.startsWith("~$")
+    && NAME_KEYS.some(k => norm(name).includes(k));
+  const keyOf = v => String(v).trim();
+  const fmt = n => Number(n).toLocaleString("en-US");
+  const esc = v => String(v).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  let S = null;
+  let running = false;
+  let stopRequested = false;
+
+  function newState(rootName) {
+    return {
+      rootName, headerSet: [], records: [],
+      pkMap: new Map(),      // pk (trimmed) -> ค่าเดิม
+      ptSpell: new Map(),    // PackageType (lowercase) -> Map(การสะกดจริง -> จำนวน)
+      counts: new Map(),     // `${pk}\u0001${pt lowercase}` -> จำนวน
+      errors: [], missingDays: [],
+      scanned: 0, matched: 0, filesDone: 0, sheets: 0, current: "",
+    };
+  }
+
+  // PackageType เทียบแบบไม่สนตัวพิมพ์ (Pallet = pallet = PALLET) และใช้การสะกดที่พบบ่อยที่สุดเป็นชื่อคอลัมน์
+  function ptDisplay(lowerKey) {
+    const m = S.ptSpell.get(lowerKey);
+    return [...m.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  }
+
+  function addRow(r, folder, file, sheet) {
+    const rec = { "Folder": folder, "Source File": file, "Source Sheet": sheet, ...r };
+    for (const k of Object.keys(r)) if (!S.headerSet.includes(k)) S.headerSet.push(k);
+    S.records.push(rec);
+    const pk = r["PK"], pt = r["PackageType"];
+    if (pk == null || pk === "" || pt == null || pt === "") return;
+    const pkK = keyOf(pk);
+    S.pkMap.set(pkK, pk);
+    const ptRaw = keyOf(pt), ptK = ptRaw.toLowerCase();
+    if (!S.ptSpell.has(ptK)) S.ptSpell.set(ptK, new Map());
+    const sp = S.ptSpell.get(ptK);
+    sp.set(ptRaw, (sp.get(ptRaw) || 0) + 1);
+    const k = pkK + "\u0001" + ptK;
+    S.counts.set(k, (S.counts.get(k) || 0) + 1);
+  }
+
+  function sortKeys(keys) {
+    return keys.sort((a, b) => {
+      const na = Number(a), nb = Number(b);
+      if (a !== "" && b !== "" && !isNaN(na) && !isNaN(nb)) return na - nb;
+      return a.localeCompare(b, "th");
+    });
+  }
+
+  function setRunning(on) {
+    running = on;
+    $("select").disabled = on;
+    $("stop").disabled = !on;
+    $("clear").disabled = on;
+    $("export").disabled = on || !S || S.records.length === 0;
+  }
+
+  function updateStatus(prefix) {
+    $("status").innerHTML =
+      `${prefix}<br>สแกนแล้ว <b>${fmt(S.scanned)}</b> รายการ · พบไฟล์ที่ตรงเงื่อนไข <b>${fmt(S.matched)}</b> ไฟล์ · ` +
+      `อ่านเสร็จ <b>${fmt(S.filesDone)}</b> ไฟล์ · ${fmt(S.sheets)} ชีท · ${fmt(S.records.length)} แถวข้อมูล`;
+  }
+
+  function renderMissing() {
+    if (!S || !S.missingDays.length) { $("missing").textContent = ""; return; }
+    const list = [...S.missingDays].sort((a, b) => a.localeCompare(b, "en"));
+    $("missing").textContent = `ไม่พบไฟล์ Loadplan ใน ${list.length} โฟลเดอร์: ${list.join(", ")}`;
+  }
+
+  async function readMatchedFile(entry, folder) {
+    const file = await entry.getFile();
+    const wb = XLSX.read(await file.arrayBuffer(), { type: "array" });
+    for (const sn of wb.SheetNames) {
+      if (!SHEET_RE.test(sn.trim())) continue;
+      S.sheets++;
+      for (const r of XLSX.utils.sheet_to_json(wb.Sheets[sn], { defval: null })) {
+        if (Object.values(r).every(v => v === null || v === "")) continue;
+        addRow(r, folder, entry.name, sn);
+      }
+    }
+  }
+
+  // โครงสร้าง: โฟลเดอร์เดือน → โฟลเดอร์วัน (เช่น 01 Sep 26) → ไฟล์ Loadplan (1 ไฟล์ต่อวัน)
+  async function scanMonth(root) {
+    for await (const day of root.values()) {
+      if (stopRequested) return;
+      if (day.kind !== "directory") continue;
+      const folder = day.name;
+      let found = 0;
+      for await (const entry of day.values()) {
+        if (stopRequested) return;
+        if (entry.kind !== "file") continue;
+        S.scanned++;
+        if (!isTarget(entry.name)) {
+          if (S.scanned % PROGRESS_EVERY === 0) updateStatus("กำลังสแกนโฟลเดอร์...");
+          continue;
+        }
+        found++;
+        S.matched++;
+        S.current = `${folder}/${entry.name}`;
+        $("current").textContent = "กำลังอ่าน: " + S.current;
+        updateStatus("กำลังอ่านไฟล์...");
+        try {
+          await readMatchedFile(entry, folder);
+        } catch (err) {
+          S.errors.push(`${S.current}: ${err.message}`);
+          $("errors").textContent = S.errors.join("\n");
+        }
+        S.filesDone++;
+        if (S.filesDone % RENDER_EVERY === 0) { renderPreview(); updateStatus("กำลังอ่านไฟล์..."); }
+      }
+      if (found === 0) {
+        S.missingDays.push(folder);
+        renderMissing();
+      }
+    }
+  }
+
+  $("select").addEventListener("click", async () => {
+    let root;
+    try { root = await window.showDirectoryPicker({ mode: "read" }); }
+    catch { return; }
+
+    S = newState(root.name);
+    stopRequested = false;
+    $("errors").textContent = "";
+    $("current").textContent = "";
+    $("missing").textContent = "";
+    setRunning(true);
+    updateStatus("เริ่มค้นหาไฟล์...");
+
+    await scanMonth(root);
+
+    setRunning(false);
+    $("current").textContent = "";
+    updateStatus(stopRequested ? "<b>หยุดแล้ว</b> (ผลลัพธ์เท่าที่อ่านได้)" : "<b>อ่านเสร็จแล้ว</b>");
+    renderMissing();
+    if (!S.records.length) {
+      $("out").innerHTML = '<div class="empty">ไม่พบไฟล์ที่ตรงเงื่อนไข หรือไม่มีชีท Preview Data</div>';
+      $("summary").textContent = "";
+    } else {
+      renderPreview();
+    }
+    $("clear").disabled = false;
+  });
+
+  $("stop").addEventListener("click", () => { stopRequested = true; $("status").innerHTML += "<br>กำลังหยุด..."; });
+
+  $("clear").addEventListener("click", () => {
+    S = null;
+    $("status").textContent = "ยังไม่ได้เลือกโฟลเดอร์";
+    $("current").textContent = "";
+    $("missing").textContent = "";
+    $("errors").textContent = "";
+    $("summary").textContent = "";
+    $("out").innerHTML = '<div class="empty">ผลลัพธ์จะแสดงที่นี่ระหว่างอ่านไฟล์</div>';
+    $("clear").disabled = true;
+    $("export").disabled = true;
+  });
+
+  function pivotAxes() {
+    const pks = sortKeys(Array.from(S.pkMap.keys()));
+    const ptK = sortKeys(Array.from(S.ptSpell.keys()));
+    const ptD = ptK.map(ptDisplay);
+    return { pks, ptK, ptD };
+  }
+
+  function renderPreview() {
+    const { pks, ptK, ptD } = pivotAxes();
+    const cnt = (pk, pt) => S.counts.get(pk + "\u0001" + pt) || 0;
+    let grand = 0;
+    const colTot = ptK.map(() => 0);
+    let html = "<table><thead><tr><th class='corner'>PK \\ PackageType</th>";
+    ptD.forEach(d => html += `<th>${esc(d)}</th>`);
+    html += "<th>Grand Total</th></tr></thead><tbody>";
+    for (const pk of pks) {
+      let rt = 0;
+      html += `<tr><td class="label">${esc(S.pkMap.get(pk))}</td>`;
+      ptK.forEach((pt, j) => {
+        const c = cnt(pk, pt); rt += c; colTot[j] += c;
+        html += `<td>${c ? fmt(c) : ""}</td>`;
+      });
+      grand += rt;
+      html += `<td class="total">${fmt(rt)}</td></tr>`;
+    }
+    html += `<tr class="total"><td class="label">Grand Total</td>`;
+    colTot.forEach(v => html += `<td>${fmt(v)}</td>`);
+    html += `<td>${fmt(grand)}</td></tr></tbody></table>`;
+    $("out").innerHTML = html;
+    $("summary").textContent = `โฟลเดอร์: ${S.rootName} · จำนวนรวม ${fmt(grand)} · ${fmt(S.records.length)} แถวข้อมูล · ${new Set(S.records.map(r => r["Folder"])).size} โฟลเดอร์วัน`;
+    $("export").disabled = running;
+  }
+
+  $("export").addEventListener("click", () => {
+    if (!S || !S.records.length) return;
+    const { pks, ptK, ptD } = pivotAxes();
+    const H = ["Folder", "Source File", "Source Sheet", ...S.headerSet];
+    const wb = XLSX.utils.book_new();
+
+    // ชีท Data: ข้อมูลทั้งหมดที่ใช้ pivot
+    const dataWs = XLSX.utils.aoa_to_sheet([H, ...S.records.map(r => H.map(h => (r[h] === undefined ? null : r[h])))]);
+    dataWs["!cols"] = H.map(h => ({ wch: Math.min(Math.max(String(h).length + 2, 12), 36) }));
+
+    // ชีท Pivot ใช้สูตร COUNTIFS อ้างอิงชีท Data (COUNTIFS ไม่สนตัวพิมพ์เช่นเดียวกับที่หน้าเว็บคำนวณ)
+    const lastRow = S.records.length + 1;
+    const pkCol = XLSX.utils.encode_col(H.indexOf("PK"));
+    const ptCol = XLSX.utils.encode_col(H.indexOf("PackageType"));
+    const pkRange = `Data!$${pkCol}$2:$${pkCol}$${lastRow}`;
+    const ptRange = `Data!$${ptCol}$2:$${ptCol}$${lastRow}`;
+
+    const pivotWs = XLSX.utils.aoa_to_sheet([["PK", ...ptD, "Grand Total"]]);
+    const addr = (c, r) => XLSX.utils.encode_cell({ c, r });
+    const lastCol = ptD.length + 1;
+    const colLetter = c => XLSX.utils.encode_col(c);
+    const cnt = (pk, pt) => S.counts.get(pk + "\u0001" + pt) || 0;
+
+    pks.forEach((pk, i) => {
+      const r = i + 1, rowNum = r + 1;
+      pivotWs[addr(0, r)] = { t: "s", v: S.pkMap.get(pk) };
+      let rowTotal = 0;
+      ptK.forEach((pt, j) => {
+        const c = j + 1, v = cnt(pk, pt);
+        rowTotal += v;
+        pivotWs[addr(c, r)] = { t: "n", f: `COUNTIFS(${pkRange},$A${rowNum},${ptRange},${colLetter(c)}$1)`, v };
+      });
+      pivotWs[addr(lastCol, r)] = { t: "n", f: `SUM(B${rowNum}:${colLetter(lastCol - 1)}${rowNum})`, v: rowTotal };
+    });
+
+    const gtR = pks.length + 1, gtNum = gtR + 1;
+    let grand = 0;
+    pivotWs[addr(0, gtR)] = { t: "s", v: "Grand Total" };
+    ptK.forEach((pt, j) => {
+      const c = j + 1;
+      const v = pks.reduce((a, pk) => a + cnt(pk, pt), 0);
+      grand += v;
+      pivotWs[addr(c, gtR)] = { t: "n", f: `SUM(${colLetter(c)}2:${colLetter(c)}${gtNum - 1})`, v };
+    });
+    pivotWs[addr(lastCol, gtR)] = { t: "n", f: `SUM(${colLetter(lastCol)}2:${colLetter(lastCol)}${gtNum - 1})`, v: grand };
+    pivotWs["!ref"] = XLSX.utils.encode_range({ s: { c: 0, r: 0 }, e: { c: lastCol, r: gtR } });
+    pivotWs["!cols"] = [{ wch: 16 }, ...ptD.map(() => ({ wch: 14 })), { wch: 14 }];
+
+    XLSX.utils.book_append_sheet(wb, pivotWs, "Pivot");
+    XLSX.utils.book_append_sheet(wb, dataWs, "Data");
+    const safe = S.rootName.replace(/[\\/:*?"<>|]/g, "_");
+    XLSX.writeFile(wb, `Pivot_${safe}.xlsx`);
+  });
+</script>
+</body>
+</html>

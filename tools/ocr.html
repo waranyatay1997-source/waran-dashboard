@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pallet Label OCR</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; background: #f5f5f5; color: #222; min-height: 100vh; padding: 2rem; }
+  .container { max-width: 900px; margin: 0 auto; background: #fff; border-radius: 12px; padding: 2rem; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+  h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+  .subtitle { font-size: 13px; color: #666; margin-bottom: 1.5rem; }
+  .ocr-drop {
+    border: 2px dashed #ccc; border-radius: 10px; padding: 2.5rem;
+    text-align: center; cursor: pointer; background: #fafafa;
+    margin-bottom: 1.25rem; transition: background 0.15s, border-color 0.15s;
+  }
+  .ocr-drop:hover, .ocr-drop.drag-over { background: #fff8ee; border-color: #e8a020; }
+  .ocr-drop .icon { font-size: 36px; margin-bottom: 8px; }
+  .ocr-drop p { font-weight: 500; margin-bottom: 4px; }
+  .ocr-drop small { color: #888; font-size: 12px; }
+  .ocr-thumb-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 1rem; }
+  .ocr-thumb {
+    position: relative; width: 90px; border-radius: 6px; overflow: hidden;
+    border: 2px solid #e0e0e0; background: #f5f5f5;
+  }
+  .ocr-thumb img { width: 100%; height: 70px; object-fit: cover; display: block; }
+  .ocr-thumb .thumb-status { font-size: 10px; text-align: center; padding: 2px 4px; background: #f0f0f0; color: #888; }
+  .ocr-thumb.done { border-color: #1a6e36; }
+  .ocr-thumb.done .thumb-status { background: #e6f4ea; color: #1a6e36; }
+  .ocr-thumb.error { border-color: #c0392b; }
+  .ocr-thumb.error .thumb-status { background: #fdecea; color: #c0392b; }
+  .ocr-thumb .remove-img {
+    position: absolute; top: 2px; right: 2px; background: rgba(0,0,0,0.5);
+    color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px;
+    font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+  button {
+    padding: 8px 18px; border-radius: 7px; border: 1px solid #ccc;
+    cursor: pointer; font-size: 14px; font-weight: 500;
+    background: #fff; color: #333; transition: background 0.1s;
+  }
+  button:hover { background: #f5f5f5; }
+  button.primary { background: #222; color: #fff; border-color: #222; }
+  button.primary:hover { background: #444; }
+  button.export { background: #1a6e36; color: #fff; border-color: #1a6e36; }
+  button.export:hover { background: #24924a; }
+  button:disabled { opacity: 0.35; cursor: not-allowed; }
+  #ocr-status { font-size: 13px; color: #666; margin-top: 6px; min-height: 20px; }
+  .progress-bar-wrap { background: #f0f0f0; border-radius: 99px; height: 8px; margin: 6px 0; overflow: hidden; }
+  .progress-bar { height: 8px; background: #e8a020; border-radius: 99px; transition: width 0.3s; width: 0%; }
+  .section-label { font-size: 12px; color: #999; margin-bottom: 8px; }
+  .badge { display: inline-block; background: #e6f4ea; color: #1a6e36; font-size: 11px; padding: 2px 8px; border-radius: 5px; margin-left: 6px; }
+  .table-wrap { overflow-x: auto; border: 1px solid #e0e0e0; border-radius: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 9px 12px; background: #f5f5f5; border-bottom: 1px solid #e0e0e0; font-weight: 600; color: #555; white-space: nowrap; }
+  td { padding: 7px 12px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  .editable-cell input {
+    width: 100%; border: 1px solid transparent; background: transparent;
+    font-size: 13px; padding: 2px 4px; border-radius: 4px; font-family: inherit;
+  }
+  .editable-cell input:focus { border-color: #4a90d9; background: #fff; outline: none; }
+  td.warn input { background: #fff8ee; border-color: #e8a020 !important; }
+  .note { font-size: 12px; color: #888; margin-top: 8px; }
+  /* Modal */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.35); z-index: 100;
+    align-items: center; justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box { background: #fff; border-radius: 12px; padding: 1.5rem 2rem; width: 460px; max-width: 95vw; box-shadow: 0 8px 32px rgba(0,0,0,0.18); }
+  .modal-box h2 { font-size: 15px; font-weight: 600; margin-bottom: 1rem; }
+  .filename-row {
+    display: flex; align-items: center;
+    border: 1px solid #ccc; border-radius: 7px; overflow: hidden;
+    font-size: 13px; margin-bottom: 1rem;
+  }
+  .filename-prefix { background: #f0f0f0; padding: 8px 10px; color: #555; white-space: nowrap; border-right: 1px solid #ccc; }
+  .filename-suffix { flex: 1; padding: 8px 10px; border: none; outline: none; font-size: 13px; font-family: inherit; }
+  .filename-ext { background: #f0f0f0; padding: 8px 10px; color: #888; white-space: nowrap; border-left: 1px solid #ccc; }
+  .modal-btns { display: flex; gap: 8px; justify-content: flex-end; }
+  /* API Key modal */
+  .apikey-input {
+    width: 100%; border: 1px solid #ccc; border-radius: 7px;
+    padding: 8px 12px; font-size: 13px; font-family: monospace;
+    margin-bottom: 1rem; outline: none;
+  }
+  .apikey-input:focus { border-color: #4a90d9; }
+  .apikey-hint { font-size: 12px; color: #888; margin-bottom: 1rem; }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="../theme.css">
+</head>
+<body>
+<div class="container">
+  <h1>📷 Pallet Label OCR</h1>
+  <p class="subtitle">อัปโหลดรูปถ่าย Label บน Pallet แล้วดึงข้อมูลอัตโนมัติด้วย Claude AI</p>
+
+  <div class="ocr-drop" id="ocr-drop" onclick="document.getElementById('ocr-file-input').click()">
+    <div class="icon">📷</div>
+    <p>คลิกหรือลากไฟล์มาวางที่นี่</p>
+    <small>รองรับ PDF, JPG, PNG — หลายไฟล์พร้อมกัน</small>
+  </div>
+  <input type="file" id="ocr-file-input" accept=".pdf,.jpg,.jpeg,.png" multiple style="display:none">
+
+  <div class="ocr-thumb-grid" id="ocr-thumb-grid"></div>
+
+  <div class="btn-row">
+    <button class="primary" id="ocr-run-btn" disabled onclick="runOCR()">▶ อ่าน OCR</button>
+    <button class="export" id="ocr-export-btn" disabled onclick="openExportModal()">⬇ Export Excel (.xlsx)</button>
+    <button onclick="clearOCR()">ล้างทั้งหมด</button>
+    <button onclick="openApiKeyModal()" style="font-size:12px;color:#888;">🔑 API Key</button>
+  </div>
+  <div id="ocr-status"></div>
+  <div id="ocr-progress" style="display:none; margin-top:6px;">
+    <div class="progress-bar-wrap"><div class="progress-bar" id="ocr-bar"></div></div>
+  </div>
+
+  <div id="ocr-results-section" style="display:none; margin-top:1.5rem;">
+    <p class="section-label">ผลลัพธ์ <span id="ocr-row-count" class="badge"></span>
+      <span style="font-size:11px;color:#aaa;margin-left:8px;">คลิกที่ช่องเพื่อแก้ไขได้</span>
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Package ID</th>
+            <th>Gross Weight</th>
+            <th>Pallet ID</th>
+            <th>PK</th>
+          </tr>
+        </thead>
+        <tbody id="ocr-results-body"></tbody>
+      </table>
+    </div>
+    <p class="note">* คลิกที่ช่องในตารางเพื่อแก้ไขก่อน Export</p>
+  </div>
+</div>
+
+<!-- Export Modal -->
+<div class="modal-overlay" id="export-modal">
+  <div class="modal-box">
+    <h2>💾 ตั้งชื่อไฟล์ก่อน Export</h2>
+    <div class="filename-row">
+      <span class="filename-prefix" id="filename-prefix"></span>
+      <input class="filename-suffix" id="filename-suffix" type="text" placeholder="กรอกส่วนท้าย..." />
+      <span class="filename-ext">.xlsx</span>
+    </div>
+    <div class="modal-btns">
+      <button onclick="closeExportModal()">ยกเลิก</button>
+      <button class="export" onclick="confirmExport()">⬇ Export</button>
+    </div>
+  </div>
+</div>
+
+<!-- API Key Modal -->
+<div class="modal-overlay" id="apikey-modal">
+  <div class="modal-box">
+    <h2>🔑 Claude API Key</h2>
+    <p class="apikey-hint">ใส่ Anthropic Claude API Key (sk-ant-...) จะเก็บไว้ใน browser ไม่ต้องใส่ซ้ำ</p>
+    <input class="apikey-input" id="apikey-input" type="password" placeholder="sk-ant-api03-..." />
+    <div class="modal-btns">
+      <button onclick="closeApiKeyModal()">ยกเลิก</button>
+      <button class="primary" onclick="saveApiKey()">บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ===================== API KEY =====================
+function getApiKey() { return localStorage.getItem('claude_api_key') || ''; }
+function openApiKeyModal() {
+  document.getElementById('apikey-input').value = getApiKey();
+  document.getElementById('apikey-modal').classList.add('open');
+  setTimeout(() => document.getElementById('apikey-input').focus(), 50);
+}
+function closeApiKeyModal() { document.getElementById('apikey-modal').classList.remove('open'); }
+function saveApiKey() {
+  const key = document.getElementById('apikey-input').value.trim();
+  if (key) { localStorage.setItem('claude_api_key', key); closeApiKeyModal(); }
+  else { alert('กรุณาใส่ API Key'); }
+}
+
+// ===================== FILES =====================
+let ocrFiles = [];
+let ocrResults = [];
+
+const ocrDrop = document.getElementById('ocr-drop');
+const ocrFileInput = document.getElementById('ocr-file-input');
+const ocrRunBtn = document.getElementById('ocr-run-btn');
+const ocrExportBtn = document.getElementById('ocr-export-btn');
+const ocrStatus = document.getElementById('ocr-status');
+
+ocrDrop.addEventListener('dragover', e => { e.preventDefault(); ocrDrop.classList.add('drag-over'); });
+ocrDrop.addEventListener('dragleave', () => ocrDrop.classList.remove('drag-over'));
+ocrDrop.addEventListener('drop', e => {
+  e.preventDefault(); ocrDrop.classList.remove('drag-over');
+  addOcrFiles([...e.dataTransfer.files]);
+});
+ocrFileInput.addEventListener('change', e => { addOcrFiles([...e.target.files]); ocrFileInput.value = ''; });
+
+async function addOcrFiles(newFiles) {
+  for (const f of newFiles) {
+    if (f.type === 'application/pdf') {
+      const ab = await f.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
+      for (let p = 1; p <= pdf.numPages; p++) {
+        const page = await pdf.getPage(p);
+        const vp = page.getViewport({ scale: 2 });
+        const canvas = document.createElement('canvas');
+        canvas.width = vp.width; canvas.height = vp.height;
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+        ocrFiles.push({ name: f.name + ' p.' + p, dataUrl: canvas.toDataURL('image/jpeg', 0.92) });
+      }
+    } else if (f.type.startsWith('image/')) {
+      const dataUrl = await new Promise(res => {
+        const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsDataURL(f);
+      });
+      ocrFiles.push({ name: f.name, dataUrl });
+    }
+  }
+  renderThumbs();
+}
+
+function renderThumbs() {
+  const grid = document.getElementById('ocr-thumb-grid');
+  grid.innerHTML = '';
+  ocrFiles.forEach((f, i) => {
+    const div = document.createElement('div');
+    div.className = 'ocr-thumb'; div.id = 'thumb-' + i;
+    div.innerHTML = `<button class="remove-img" onclick="removeFile(${i})">✕</button>
+      <img src="${f.dataUrl}">
+      <div class="thumb-status">${f.name.length > 14 ? f.name.slice(0,12)+'…' : f.name}</div>`;
+    grid.appendChild(div);
+  });
+  ocrRunBtn.disabled = ocrFiles.length === 0;
+}
+
+function removeFile(i) { ocrFiles.splice(i, 1); renderThumbs(); }
+
+function clearOCR() {
+  ocrFiles = []; ocrResults = [];
+  renderThumbs();
+  ocrStatus.textContent = '';
+  document.getElementById('ocr-progress').style.display = 'none';
+  document.getElementById('ocr-results-section').style.display = 'none';
+  ocrExportBtn.disabled = true;
+}
+
+// ===================== CLAUDE OCR =====================
+async function resizeImage(dataUrl, maxSize=1600, quality=0.92) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const ratio = Math.min(maxSize / img.width, maxSize / img.height, 1.0);
+      const w = Math.round(img.width * ratio);
+      const h = Math.round(img.height * ratio);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.src = dataUrl;
+  });
+}
+
+async function callClaude(dataUrl, apiKey) {
+  // Resize + compress before sending
+  dataUrl = await resizeImage(dataUrl);
+  const base64 = dataUrl.split(',')[1];
+  const mediaType = 'image/jpeg';
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5',
+      max_tokens: 512,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
+          { type: 'text', text: `Read this pallet label and reply ONLY this JSON, no extra text:
+{"packageId":"handwritten number (any ink color) on a small white sticker, usually 1-2 digits. Read carefully: a 2 has a curved top and a flat horizontal base, a 9 has a closed loop at the top with a straight tail down. Do not confuse them. Empty string if not visible","grossWeight":"number top-left corner digits only no KG e.g. 616.2","palletId":"alphanumeric code below Time field e.g. PWBA90700A","pk":"shipment number YYYYMMDD-NNNNN e.g. 20260910-00972"}` }
+        ]
+      }]
+    })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error('Claude API ' + res.status + ': ' + (err.error?.message || ''));
+  }
+  const data = await res.json();
+  const text = data.content?.[0]?.text || '{}';
+  const m = text.match(/\{[\s\S]*\}/);
+  if (m) return JSON.parse(m[0]);
+  throw new Error('Parse error: ' + text.slice(0, 80));
+}
+
+async function runOCR() {
+  let apiKey = getApiKey();
+  if (!apiKey) { openApiKeyModal(); return; }
+
+  ocrResults = [];
+  ocrRunBtn.disabled = true;
+  ocrExportBtn.disabled = true;
+  document.getElementById('ocr-progress').style.display = 'block';
+  document.getElementById('ocr-results-section').style.display = 'none';
+  document.getElementById('ocr-bar').style.width = '0%';
+
+  for (let i = 0; i < ocrFiles.length; i++) {
+    const thumb = document.getElementById('thumb-' + i);
+    thumb.querySelector('.thumb-status').textContent = '⏳';
+    ocrStatus.textContent = `กำลังอ่าน ${i+1}/${ocrFiles.length}: ${ocrFiles[i].name}`;
+    document.getElementById('ocr-bar').style.width = ((i / ocrFiles.length) * 100) + '%';
+    try {
+      const parsed = await callClaude(ocrFiles[i].dataUrl, apiKey);
+      ocrResults.push({
+        packageId:   parsed.packageId   || '',
+        grossWeight: parsed.grossWeight || '',
+        palletId:    parsed.palletId    || '',
+        pk:          parsed.pk          || '',
+      });
+      thumb.classList.add('done');
+      thumb.querySelector('.thumb-status').textContent = '✓ ' + (parsed.palletId || '?');
+    } catch(e) {
+      ocrResults.push({ packageId: '', grossWeight: '', palletId: 'Error: ' + e.message, pk: '' });
+      thumb.classList.add('error');
+      thumb.querySelector('.thumb-status').textContent = '✗ Error';
+    }
+  }
+
+  document.getElementById('ocr-bar').style.width = '100%';
+  ocrStatus.textContent = `เสร็จ — อ่านได้ ${ocrResults.length} รูป`;
+  ocrRunBtn.disabled = false;
+  renderResults();
+}
+
+function renderResults() {
+  const tbody = document.getElementById('ocr-results-body');
+  tbody.innerHTML = '';
+  ocrResults.forEach((r, i) => {
+    const warn = v => !v ? ' warn' : '';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${i+1}</td>
+      <td class="editable-cell${warn(r.packageId)}"><input value="${r.packageId}" oninput="ocrResults[${i}].packageId=this.value"></td>
+      <td class="editable-cell${warn(r.grossWeight)}"><input value="${r.grossWeight}" oninput="ocrResults[${i}].grossWeight=this.value"></td>
+      <td class="editable-cell${warn(r.palletId)}"><input value="${r.palletId}" oninput="ocrResults[${i}].palletId=this.value"></td>
+      <td class="editable-cell${warn(r.pk)}"><input value="${r.pk}" oninput="ocrResults[${i}].pk=this.value"></td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('ocr-row-count').textContent = ocrResults.length + ' รูป';
+  document.getElementById('ocr-results-section').style.display = 'block';
+  ocrExportBtn.disabled = ocrResults.length === 0;
+}
+
+// ===================== EXPORT =====================
+function getDatePrefix() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth()+1).padStart(2,'0');
+  const d = String(now.getDate()).padStart(2,'0');
+  return `Pallet Labels_${y}${m}${d} - T.`;
+}
+
+function openExportModal() {
+  document.getElementById('filename-prefix').textContent = getDatePrefix();
+  document.getElementById('filename-suffix').value = '';
+  document.getElementById('export-modal').classList.add('open');
+  setTimeout(() => document.getElementById('filename-suffix').focus(), 50);
+}
+function closeExportModal() { document.getElementById('export-modal').classList.remove('open'); }
+function confirmExport() {
+  const prefix = document.getElementById('filename-prefix').textContent;
+  const suffix = document.getElementById('filename-suffix').value.trim();
+  closeExportModal();
+  doExport(prefix + suffix + '.xlsx');
+}
+
+// แปลงเฉพาะค่าที่เป็นตัวเลขล้วน (รองรับทศนิยมและลูกน้ำ) ค่าอื่นคืนเป็น string เดิม
+function toNumIfNumeric(v) {
+  const s = String(v ?? '').trim().replace(/,/g, '');
+  return /^-?\d+(\.\d+)?$/.test(s) ? Number(s) : v;
+}
+
+function doExport(filename) {
+  const header = ['Package ID', 'Gross Weight', 'Pallet ID', 'PK'];
+  const rows = ocrResults.map(r => [
+    toNumIfNumeric(r.packageId),
+    toNumIfNumeric(r.grossWeight),
+    r.palletId,
+    r.pk  // เก็บเป็น text พร้อมขีดกลางเหมือนป้ายจริง
+  ]);
+  const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+  ws['!cols'] = [{ wch: 12 }, { wch: 18 }, { wch: 18 }, { wch: 22 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Pallet Labels');
+  XLSX.writeFile(wb, filename);
+}
+
+// ===================== MODAL KEYBOARD =====================
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('filename-suffix').addEventListener('keydown', e => {
+    if (e.key === 'Enter') confirmExport();
+    if (e.key === 'Escape') closeExportModal();
+  });
+  document.getElementById('export-modal').addEventListener('click', e => {
+    if (e.target === document.getElementById('export-modal')) closeExportModal();
+  });
+  document.getElementById('apikey-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') saveApiKey();
+    if (e.key === 'Escape') closeApiKeyModal();
+  });
+  document.getElementById('apikey-modal').addEventListener('click', e => {
+    if (e.target === document.getElementById('apikey-modal')) closeApiKeyModal();
+  });
+  // Auto-prompt API key on first visit
+  if (!getApiKey()) openApiKeyModal();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>THLC PDF Merge Center</title>
+  
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="../theme.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="brand-mark">TH</span><div><b>THLC</b><small>PDF MERGE CENTER</small></div></div>
+  <div class="status-pill"><i></i> Browser-only processing</div>
+</header>
+
+<main class="shell">
+  <section class="hero">
+    <div>
+      <p class="eyebrow">CUSTOMS DOCUMENT WORKFLOW</p>
+      <h1>Shipment PDF<br><span>Merge Center</span></h1>
+      <p class="hero-copy">Build a complete customs document pack from shipment folders, verify every required PDF, arrange the sequence, and merge locally in your browser.</p>
+    </div>
+  </section>
+
+  <div class="steps">
+    <div class="step active"><b>01</b><span>Shipments</span></div>
+    <div class="step"><b>02</b><span>Documents</span></div>
+    <div class="step"><b>03</b><span>Scan Folder</span></div>
+    <div class="step"><b>04</b><span>Review & Merge</span></div>
+  </div>
+
+  <section class="card">
+    <div class="card-head">
+      <div><p class="eyebrow">01 / SHIPMENT INPUT</p><h2>Shipment list</h2></div>
+      <div class="head-actions">
+        <button class="btn btn-outline" id="clearShipments">Clear table</button>
+        <button class="btn btn-dark" id="addShipment">+ Add shipment</button>
+      </div>
+    </div>
+    <p class="muted">Click the first CW1 No. cell and paste (Ctrl+V) two columns straight from Excel — rows are added automatically. CW1 No. locates the TWB file; PK locates the shipment's own folder.</p>
+    <div class="ship-table-wrap">
+      <table class="ship-table">
+        <thead><tr><th>CW1 No.</th><th>PK</th><th></th></tr></thead>
+        <tbody id="shipmentRows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="grid2">
+    <div class="card drop-card">
+      <div class="card-head compact"><div><p class="eyebrow">02 / REQUIRED</p><h2>Export Entry</h2></div><span class="count" id="exportCount">0</span></div>
+      <label class="dropzone" data-input="exportInput"><strong>Drop PDF here</strong><span>or click to browse</span><input id="exportInput" type="file" accept="application/pdf,.pdf"></label>
+      <div class="file-list" id="exportList"></div>
+    </div>
+    <div class="card drop-card">
+      <div class="card-head compact"><div><p class="eyebrow">03 / REQUIRED</p><h2>Goods Control List</h2></div><span class="count" id="gclCount">0</span></div>
+      <label class="dropzone" data-input="gclInput"><strong>Drop PDF here</strong><span>or click to browse</span><input id="gclInput" type="file" accept="application/pdf,.pdf"></label>
+      <div class="file-list" id="gclList"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <div><p class="eyebrow">04 / FOLDER SCAN</p><h2>Shipment folder</h2></div>
+      <label class="btn btn-outline">Select folder<input id="folderInput" type="file" webkitdirectory directory multiple hidden></label>
+    </div>
+    <div class="scan-panel" id="scanPanel">
+      <div class="scan-icon">⌁</div>
+      <div><strong id="scanTitle">No folder selected</strong><span id="scanText">Select the main shipment folder to scan filenames only.</span></div>
+    </div>
+  </section>
+
+  <section class="card hidden" id="reviewCard">
+    <div class="card-head">
+      <div><p class="eyebrow">05 / REVIEW</p><h2>Document sequence</h2></div>
+      <div class="summary" id="summary"></div>
+    </div>
+    <p class="muted">Drag the rows to change order. The THLC License is locked to the final position.</p>
+    <div id="reviewList"></div>
+  </section>
+
+  <section class="card hidden" id="missingCard">
+    <div class="card-head"><div><p class="eyebrow">ACTION REQUIRED</p><h2>Missing documents</h2></div></div>
+    <div id="missingList"></div>
+  </section>
+
+  <section class="merge-bar">
+    <div class="license-info">
+      <span class="lock">▣</span>
+      <div><strong>THLC License</strong><small id="licenseName">Always appended as the final PDF — locked, cannot be reordered</small></div>
+    </div>
+    <label class="btn btn-outline btn-sm">Replace license<input id="licenseInput" type="file" accept="application/pdf,.pdf" hidden></label>
+    <button class="btn btn-primary" id="mergeBtn">Merge PDF <span>→</span></button>
+  </section>
+  <p class="merge-status" id="mergeStatus"></p>
+</main>
+
+<div class="modal hidden" id="nameModal">
+  <div class="modal-box">
+    <p class="eyebrow">FINAL OUTPUT</p><h2>Name your merged PDF</h2>
+    <input id="filename" value="THLC_Customs_Document_Pack">
+    <div class="modal-actions"><button class="btn btn-outline" id="cancelModal">Cancel</button><button class="btn btn-primary" id="confirmMerge">Merge & Download →</button></div>
+  </div>
+</div>
+<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
