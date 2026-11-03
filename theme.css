@@ -1,0 +1,124 @@
+/* Waran theme: applied on top of each tool's own CSS.
+   Only presentation is changed; no JavaScript or markup logic is touched. */
+
+:root {
+  --navy: #16233E; --navy-soft: #1F3155; --paper: #F4F5F2; --paper-line: #DEE1DA;
+  --steel: #4C7A9C; --amber: #D98E3F; --text: #1E2430; --text-mute: #5C6472;
+  --danger: #B3492F; --danger-bg: #FBEEEC; --good: #2F6D4F; --good-bg: #F1F8F4; --warn-bg: #FCEFE2;
+  /* aliases used by the individual tool pages */
+  --bg: var(--paper); --card: #FFFFFF; --line: var(--paper-line); --muted: var(--text-mute);
+  --teal: var(--steel); --teal-soft: #EEF3F6; --blue: var(--steel); --accent: var(--steel);
+  --head: var(--navy); --border: var(--paper-line); --total: #EEF3F6;
+  --warn: #B7791F; --ok: var(--good); --shadow: none;
+  color-scheme: light;
+}
+
+html, body {
+  background: var(--paper) !important; color: var(--text) !important;
+  font-family: "IBM Plex Sans", "Sarabun", "Segoe UI", Arial, sans-serif !important;
+}
+body { padding-bottom: 40px; }
+body h1 { color: var(--navy); font-weight: 650; letter-spacing: -.01em; }
+
+/* ---- Cards / containers ---- */
+body .card, body .container, body .wrap .card {
+  background: #fff !important; border: 1px solid var(--paper-line) !important;
+  border-radius: 8px !important; box-shadow: none !important;
+}
+body .container { max-width: 960px; }
+body .hero {
+  background: var(--navy) !important; color: #fff !important; border-radius: 8px;
+  padding: 22px 26px !important; margin: 0 0 18px;
+}
+body .hero h1 { color: #fff; font-size: 20px; }
+
+/* ---- Buttons: navy = normal, amber = primary action, outline = secondary ---- */
+body button, body .btn {
+  font-family: inherit; font-weight: 600; font-size: 13px;
+  border-radius: 5px; border: 1px solid var(--steel);
+  background: #fff; color: var(--steel); padding: 8px 14px; cursor: pointer;
+}
+body button:hover:not(:disabled), body .btn:hover:not(:disabled) { background: #EEF3F6; }
+body button:disabled, body .btn:disabled { opacity: .4; cursor: not-allowed; }
+body button.primary, body .btn:not(.ghost):not(.stop):not(.save-btn) {
+  background: var(--navy); border-color: var(--navy); color: #fff;
+}
+body button.primary:hover:not(:disabled), body .btn:not(.ghost):not(.stop):hover:not(:disabled) {
+  background: var(--navy-soft);
+}
+body button.export, body #export, body .save-btn, body .mbtns .primary, body .qbtns button:first-child {
+  background: var(--amber) !important; border-color: var(--amber) !important; color: var(--navy) !important;
+}
+body button.export:hover:not(:disabled), body #export:hover:not(:disabled), body .save-btn:hover {
+  filter: brightness(1.05); background: var(--amber) !important;
+}
+body .btn.ghost { background: #fff; color: var(--steel); border-color: var(--steel); }
+body .btn.stop, body .clear-btn { background: #fff; color: var(--danger); border: 1px solid var(--danger); }
+body .clear-btn:hover { background: var(--danger-bg) !important; }
+body .link { color: var(--steel); }
+
+/* ---- Drop zones ---- */
+body .ocr-drop, body .drop {
+  background: var(--paper); border: 2px dashed #B7BDC6; border-radius: 6px;
+}
+body .ocr-drop:hover, body .ocr-drop.drag-over, body .drop.over {
+  background: #EEF3F6; border-color: var(--steel);
+}
+body .ocr-thumb { border-radius: 6px; }
+body .ocr-thumb.done { border-color: var(--good); }
+body .ocr-thumb.error { border-color: var(--danger); }
+
+/* ---- Status / progress ---- */
+body .progress-bar { background: var(--steel); }
+body .progress-bar-wrap { background: var(--paper-line); }
+body #ocr-status, body .status { color: var(--text-mute); }
+body .missing { color: #8A5A1E; }
+body .errors { color: var(--danger); }
+body .badge { background: var(--good-bg); color: var(--good); }
+body .count.has, body .count { color: var(--good); border-color: var(--good); }
+
+/* ---- Tables ---- */
+body th {
+  background: var(--navy) !important; color: #fff !important; font-weight: 600; font-size: 12px;
+  border-color: #2A3A5C !important;
+}
+body td { border-color: var(--paper-line) !important; }
+body .table-wrap, body .table-scroll { border: 1px solid var(--paper-line) !important; border-radius: 6px; }
+body tr.total td, body td.total { background: #EEF3F6 !important; font-weight: 700; }
+body .editable-cell input { font-family: inherit; }
+body .editable-cell input:focus { border-color: var(--steel) !important; }
+body td.warn input { background: var(--warn-bg) !important; border-color: var(--amber) !important; }
+body .note, body .subtitle, body .muted, body .sub { color: var(--text-mute); }
+body .section-label { color: var(--text-mute); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; font-size: 11px; }
+
+/* ---- Inputs ---- */
+body input[type=text], body input[type=password], body .fnrow input, body .apikey-input,
+body .filename-suffix, body .filename-row, body .fnrow input {
+  border-color: var(--paper-line);
+}
+body input:focus, body .fnrow input:focus { outline: 2px solid var(--steel); }
+
+/* ---- Modal ---- */
+body .modal-overlay.open, body .modal { background: rgba(22,35,62,.45) !important; }
+body .modal-box, body .mbox { border-radius: 8px !important; box-shadow: 0 12px 40px rgba(22,35,62,.25) !important; }
+body .mbox h3, body .modal-box h2 { color: var(--navy); }
+body .filename-prefix, body .filename-ext { background: var(--paper); }
+body .mbtns button, body .qbtns button:not(:first-child) { background: #fff; color: var(--steel); }
+
+/* ---- Toast + busy overlay ---- */
+body #toast { background: var(--navy); border-radius: 6px; }
+body #toast.err { background: var(--danger); }
+body #busy { background: rgba(22,35,62,.55); }
+
+/* ---- Sections grid (Invoice) ---- */
+body .sec-h b { color: var(--navy); }
+body .step { background: var(--navy); color: #fff; }
+body .sec:hover { border-color: #B7BDC6; }
+body .badge-last { background: var(--navy); }
+body .thumb { background: var(--paper); border-color: var(--paper-line); }
+
+/* ---- Layout on small screens ---- */
+@media (max-width: 640px) {
+  body { padding: 14px !important; }
+  body .hero { padding: 16px !important; }
+}

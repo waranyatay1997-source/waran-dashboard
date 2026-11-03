@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Waran Tools Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+  html, body { height: 100%; margin: 0; }
+  body { display: flex; flex-direction: column; }
+  .layout { flex: 1; display: grid; grid-template-columns: 250px 1fr; min-height: 0; }
+
+  /* sidebar */
+  .sidebar { background: #fff; border-right: 1px solid var(--paper-line); padding: 18px 12px; overflow-y: auto; }
+  .nav-label { font-family: "IBM Plex Mono", monospace; font-size: 10.5px; letter-spacing: .08em; color: var(--text-mute); padding: 6px 12px 10px; text-transform: uppercase; }
+  .nav a {
+    display: flex; align-items: center; gap: 11px; padding: 10px 12px; border-radius: 6px; margin-bottom: 4px;
+    color: var(--text); text-decoration: none; font-size: 13.5px; font-weight: 500; border: 1px solid transparent;
+  }
+  .nav a:hover { background: #EEF3F6; }
+  .nav a.active { background: #EEF3F6; border-color: var(--steel); color: var(--navy); font-weight: 600; }
+  .nav .n {
+    width: 26px; height: 26px; border-radius: 6px; background: #EEF0EC; color: var(--text-mute);
+    font-family: "IBM Plex Mono", monospace; font-size: 11px; display: grid; place-items: center; flex-shrink: 0;
+  }
+  .nav a.active .n { background: var(--steel); color: #fff; }
+
+  /* main */
+  .main { min-width: 0; padding: 28px 32px 48px; overflow-y: auto; }
+  .hero { margin-bottom: 22px; }
+  .hero h1 { margin: 0 0 8px; font-size: 26px; line-height: 1.25; font-weight: 650; }
+  .hero h1 span { color: var(--amber); }
+  .hero p { margin: 0; font-size: 13.5px; color: #C9D3E0; line-height: 1.6; max-width: 60ch; }
+
+  .tools { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+  .tool {
+    background: #fff; border: 1px solid var(--paper-line); border-radius: 8px; padding: 20px;
+    display: flex; flex-direction: column; gap: 10px; transition: border-color .15s, transform .15s;
+  }
+  .tool:hover { border-color: var(--steel); transform: translateY(-1px); }
+  .tool-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .tool-icon {
+    width: 40px; height: 40px; border-radius: 8px; background: var(--navy); color: var(--amber);
+    display: grid; place-items: center; font-weight: 700; font-size: 13px; font-family: "IBM Plex Mono", monospace;
+  }
+  .tag {
+    font-family: "IBM Plex Mono", monospace; font-size: 10px; text-transform: uppercase; letter-spacing: .04em;
+    border: 1px solid var(--paper-line); color: var(--text-mute); border-radius: 3px; padding: 2px 6px; white-space: nowrap;
+  }
+  .tool h3 { margin: 4px 0 0; font-size: 15px; color: var(--navy); font-weight: 650; }
+  .tool p { margin: 0; font-size: 12.5px; color: var(--text-mute); line-height: 1.55; flex: 1; }
+  .tool .btn { align-self: flex-start; margin-top: 4px; }
+
+  .section-title { font-size: 13px; font-weight: 600; color: var(--navy); margin: 26px 0 12px; }
+  .howto { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .howto div { background: #fff; border: 1px solid var(--paper-line); border-radius: 8px; padding: 14px 16px; font-size: 12.5px; color: var(--text-mute); line-height: 1.55; }
+  .howto b { display: block; color: var(--navy); font-size: 13px; margin-bottom: 4px; }
+
+  /* tool view */
+  .tool-view { display: none; flex-direction: column; height: 100%; min-height: 0; }
+  .tool-view.show { display: flex; }
+  .tool-bar {
+    display: flex; align-items: center; gap: 12px; padding: 10px 20px; background: #fff; border-bottom: 1px solid var(--paper-line);
+  }
+  .tool-bar h2 { margin: 0; font-size: 15px; color: var(--navy); font-weight: 650; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tool-bar .btn { font-size: 12.5px; }
+  .tool-frame { flex: 1; width: 100%; border: 0; background: var(--paper); min-height: 0; }
+  #view-home.hide { display: none; }
+
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { border-right: none; border-bottom: 1px solid var(--paper-line); padding: 10px; }
+    .nav { display: flex; gap: 6px; overflow-x: auto; }
+    .nav a { white-space: nowrap; margin-bottom: 0; }
+    .nav-label { display: none; }
+    .main { padding: 18px 16px 32px; }
+    .howto { grid-template-columns: 1fr; }
+    .tool-frame { height: calc(100vh - 170px); flex: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand"><span class="brand-mark">WR</span><div><b>WARAN</b><small>TOOLS DASHBOARD</small></div></div>
+  <div class="status-pill"><i></i> Browser-only processing</div>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="nav-label">เครื่องมือ / Tools</div>
+    <nav class="nav" id="nav"></nav>
+  </aside>
+
+  <main class="main">
+    <section id="view-home">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">WARAN WORKFLOW</p>
+          <h1>Waran <span>Tools</span></h1>
+          <p>รวมเครื่องมือการทำงานทั้งหมดไว้ในหน้าเดียว ประมวลผลในเบราว์เซอร์ของคุณ เลือกเครื่องมือจากเมนูด้านซ้ายหรือจากการ์ดด้านล่าง</p>
+        </div>
+      </section>
+
+      <div class="tools" id="tools"></div>
+
+      <div class="section-title">วิธีใช้งาน</div>
+      <div class="howto">
+        <div><b>1. เลือกเครื่องมือ</b>กดการ์ดหรือเมนูด้านซ้ายเพื่อเปิดเครื่องมือที่ต้องการ</div>
+        <div><b>2. ทำงานตามขั้นตอน</b>ทำตามลำดับที่แต่ละหน้ากำหนด ไฟล์จะไม่ถูกอัปโหลดขึ้นเซิร์ฟเวอร์</div>
+        <div><b>3. ดาวน์โหลดผลลัพธ์</b>บันทึกไฟล์ PDF / Excel ได้ทันทีจากหน้าเครื่องมือ</div>
+      </div>
+    </section>
+
+    <section class="tool-view" id="view-tool">
+      <div class="tool-bar">
+        <button class="btn btn-outline btn-sm" id="backBtn">← หน้าแรก</button>
+        <h2 id="toolTitle"></h2>
+        <a class="btn btn-outline btn-sm" id="openNew" target="_blank" rel="noopener">เปิดในแท็บใหม่ ↗</a>
+      </div>
+      <iframe class="tool-frame" id="toolFrame" title="Tool" allow="clipboard-read; clipboard-write"></iframe>
+    </section>
+  </main>
+</div>
+
+<script>
+  const TOOLS = [
+    { id: "pdf-merge",        no: "01", abbr: "PDF", title: "PDF Merge Center",
+      file: "tools/pdf-merge.html", tag: "Browser",
+      desc: "รวมเอกสาร Customs ของ Shipment เข้าเป็นชุดเดียว ตรวจเอกสารที่ขาด จัดลำดับ และ merge ในเบราว์เซอร์" },
+    { id: "ocr",              no: "02", abbr: "OCR", title: "Pallet Label OCR",
+      file: "tools/ocr.html", tag: "Claude API",
+      desc: "อัปโหลดรูป Label บน Pallet แล้วดึง Package ID, Gross Weight, Pallet ID และ PK อัตโนมัติ ก่อน Export เป็น Excel" },
+    { id: "wd-billing",       no: "03", abbr: "WD", title: "WD Warehouse Billing",
+      file: "tools/wd-billing.html", tag: "Folder",
+      desc: "เลือกโฟลเดอร์ Loadplan แล้วสรุปจำนวนตาม PK และ PackageType พร้อม Export เป็นไฟล์ .xlsx" },
+    { id: "invoice-merger",   no: "04", abbr: "INV", title: "Invoice Pack Merger",
+      file: "tools/invoice-merger.html", tag: "Browser",
+      desc: "จัดชุดเอกสาร Invoice, TWB, Export Entry, CIPL, FORM-D, POD และอื่นๆ แล้วบันทึกเป็น Complete / VIM PDF" }
+  ];
+
+  const nav = document.getElementById("nav");
+  const grid = document.getElementById("tools");
+  const home = document.getElementById("view-home");
+  const view = document.getElementById("view-tool");
+  const frame = document.getElementById("toolFrame");
+
+  nav.innerHTML = `<a href="#" data-route="home"><span class="n">⌂</span>หน้าแรก</a>` +
+    TOOLS.map(t => `<a href="#${t.id}" data-route="${t.id}"><span class="n">${t.no}</span>${t.title}</a>`).join("");
+
+  grid.innerHTML = TOOLS.map(t => `
+    <article class="tool">
+      <div class="tool-top"><div class="tool-icon">${t.abbr}</div><span class="tag">${t.tag}</span></div>
+      <div><h3>${t.title}</h3></div>
+      <p>${t.desc}</p>
+      <a class="btn btn-dark btn-sm" href="#${t.id}">เปิดเครื่องมือ →</a>
+    </article>`).join("");
+
+  function route() {
+    const id = location.hash.replace("#", "");
+    const tool = TOOLS.find(t => t.id === id);
+    document.querySelectorAll(".nav a").forEach(a =>
+      a.classList.toggle("active", a.dataset.route === (tool ? tool.id : "home")));
+    if (tool) {
+      if (frame.dataset.current !== tool.id) {
+        frame.src = tool.file;
+        frame.dataset.current = tool.id;
+      }
+      document.getElementById("toolTitle").textContent = tool.title;
+      document.getElementById("openNew").href = tool.file;
+      home.classList.add("hide");
+      view.classList.add("show");
+    } else {
+      view.classList.remove("show");
+      home.classList.remove("hide");
+    }
+    window.scrollTo(0, 0);
+  }
+
+  document.getElementById("backBtn").addEventListener("click", () => { location.hash = ""; });
+  window.addEventListener("hashchange", route);
+  route();
+</script>
+</body>
+</html>
