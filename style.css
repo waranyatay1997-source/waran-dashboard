@@ -186,16 +186,23 @@ table.ship-table td.rm button { border: none; background: none; color: var(--tex
 }
 
 /* ---------- Merge bar ---------- */
+/* Dock sticks to the bottom of the viewport so Merge is always reachable without scrolling */
+.merge-dock {
+  position: sticky; bottom: 14px; z-index: 30; margin-top: 8px;
+  background: white; border: 1px solid var(--steel); border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(22,35,62,.18); overflow: hidden;
+}
 .merge-bar {
-  display: flex; align-items: center; gap: 14px; background: white; border: 1px solid var(--paper-line);
-  border-radius: 8px; padding: 16px 20px;
+  display: flex; align-items: center; gap: 14px; padding: 14px 20px;
 }
 .license-info { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
 .lock { font-size: 16px; color: var(--amber); }
 .merge-bar strong { display: block; font-size: 13.5px; color: var(--navy); }
 .merge-bar small { font-size: 11.5px; color: var(--text-mute); }
 #licenseName { display: block; font-size: 11px; color: var(--text-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.merge-status { font-size: 13px; color: var(--text-mute); white-space: pre-line; margin-top: 12px; line-height: 1.6; }
+.merge-status { font-size: 13px; color: var(--text-mute); white-space: pre-line; margin: 0; line-height: 1.6;
+  padding: 0 20px; max-height: 28vh; overflow-y: auto; }
+.merge-status:not(:empty) { padding: 12px 20px; border-bottom: 1px solid var(--paper-line); }
 .merge-status.error { color: var(--danger); }
 .merge-status.success { color: var(--good); }
 
@@ -216,3 +223,25 @@ table.ship-table td.rm button { border: none; background: none; color: var(--tex
   .steps { flex-wrap: wrap; }
   .step { min-width: 45%; }
 }
+
+/* ---------- Uploaded / user-picked files (blue) ---------- */
+#reviewList .row.manual { border-color: #3D6FD1; background: #EEF4FF; }
+#reviewList .row.manual .fn { color: #2A56B0; font-weight: 600; }
+#reviewList .row .tag.up-tag { color: #2A56B0; border-color: #3D6FD1; background: white; }
+
+/* ---------- Missing item + candidate picks ---------- */
+.missing-item { margin-bottom: 10px; }
+.missing-item .row { margin-bottom: 0; }
+.cands { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 4px 2px 4px; }
+.cands small { width: 100%; font-size: 11.5px; color: var(--text-mute); }
+.cand-btn {
+  border: 1px solid var(--steel); background: white; color: var(--steel); border-radius: 4px;
+  padding: 5px 9px; font-size: 11.5px; cursor: pointer; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cand-btn:hover { background: #EEF3F6; }
+.cand-btn.cn { border-color: var(--amber); color: #8A5A1E; background: #FFF8EF; }
+
+/* ---------- Back link to portal ---------- */
+.topbar .back { color: #fff; text-decoration: none; font-size: 13px; opacity: .9; }
+.topbar .back:hover { opacity: 1; text-decoration: underline; }

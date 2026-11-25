@@ -161,6 +161,19 @@ folderInput.addEventListener('change', e => {
     name: f.name
   }));
   const rootName = files.length && files[0].webkitRelativePath ? files[0].webkitRelativePath.split('/')[0] : '(folder)';
+  // Sanity check: a Customs TH folder should contain BKK-SZX / BKK-SHA sub-folders.
+  // If it doesn't, the picked folder is probably a shortcut / empty copy, not the real one.
+  const hasBkkStructure = scanFiles.some(e => segsOf(e).some(seg => norm(seg).startsWith('bkk')));
+  if (!scanFiles.length || !hasBkkStructure) {
+    scanPanel.className = 'scan-panel error';
+    scanTitle.textContent = `"${rootName}" looks wrong`;
+    scanText.textContent = scanFiles.length
+      ? `Found ${scanFiles.length} PDF(s) but no BKK-SZX / BKK-SHA folders. This may be a OneDrive shortcut or the wrong copy — open the folder in File Explorer and pick the one that contains BKK-SZX / BKK-SHA.`
+      : 'No PDF files found in this folder. Pick the real Customs TH folder (not a shortcut).';
+    buildQueues();
+    updateStepper();
+    return;
+  }
   scanPanel.className = 'scan-panel success';
   scanTitle.textContent = `Scanned "${rootName}"`;
   scanText.textContent = `Found ${scanFiles.length} PDF file(s). Matching against ${getShipments().length} shipment(s)...`;
@@ -169,126 +182,187 @@ folderInput.addEventListener('change', e => {
 });
 
 /* ================= Matching logic ================= */
-function folderSegments(lowerPath) { return lowerPath.split('/').slice(0, -1); }
+// Everything is compared as "normalized" text: lowercase, letters + digits only.
+// So "SRKL0082376", "srkl-0082376", "SRKL 0082376" and long names with spaces,
+// underscores or dashes all compare equal. For TWB we also use the digits only,
+// because the TWB file is named "RKL0082376" while CW1 is "SRKL0082376".
+function norm(s) { return (s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+function digitsOf(s) { return (s || '').replace(/\D/g, ''); }
+function segsOf(e) { return e.lowerPath.split('/').slice(0, -1); }
+function keysFor(cw1, pk) {
+  return [norm(pk), norm(cw1), digitsOf(cw1)].filter(k => k.length >= 4);
+}
+function underRoot(e, root) { return e.lowerPath.startsWith(root + '/'); }
 
-// Must contain the target keyword AND "th", and must NOT be the sibling "CN" folder
-// (real-world folders come in pairs like "CIPL TH" / "CIPL CN" — a naive "includes cipl"
-// check matches both, which was pulling the wrong-country documents into the merge).
-function isCiplTh(seg) { return seg.includes('cipl') && seg.includes('th') && !seg.includes('cn'); }
-function isInvoiceAttachmentTh(seg) { return seg.includes('invoice') && seg.includes('attach') && !seg.includes('cn'); }
+function isCiplTh(n) { return n.includes('cipl') && n.includes('th') && !n.includes('cn'); }
+function isInvoiceAttachmentTh(n) { return n.includes('invoice') && n.includes('attach') && !n.includes('cn'); }
+function isCiplAny(n) { return n.includes('cipl'); }
+// Filename says CIPL and the file is not inside a CN-labelled CIPL folder.
+function isCiplByName(e) {
+  if (!norm(e.name).includes('cipl')) return false;
+  return !segsOf(e).some(seg => { const n = norm(seg); return n.includes('cipl') && n.includes('cn'); });
+}
+function isCn(n) { return n.includes('cn'); }
 
-function findShipmentRootPaths(pk) {
-  if (!pk) return [];
-  const p = pk.toLowerCase();
+// Every folder (at any depth) whose normalized name contains the PK or CW1 number.
+// Most specific (deepest) root first.
+function shipmentRoots(cw1, pk) {
+  const keys = keysFor(cw1, pk);
   const roots = new Set();
   scanFiles.forEach(e => {
-    const segs = folderSegments(e.lowerPath);
-    const hit = segs.findIndex(s => s.includes(p));
-    if (hit >= 0) roots.add(segs.slice(0, hit + 1).join('/'));
+    const s = segsOf(e);
+    s.forEach((seg, idx) => {
+      if (keys.some(k => norm(seg).includes(k))) roots.add(s.slice(0, idx + 1).join('/'));
+    });
   });
-  return [...roots];
+  return [...roots].sort((a, b) => b.length - a.length);
 }
 
-function filesUnderRootInFolder(root, folderTest) {
+// Find documents by folder name (CIPL TH / Invoice attachment) inside the shipment's root.
+// Falls back to filename containing the PK / CW1 only if no folder matched.
+function findDocs(cw1, pk, folderTest, limit, nameTest) {
+  const keys = keysFor(cw1, pk);
+  for (const root of shipmentRoots(cw1, pk)) {
+    const hits = scanFiles.filter(e => underRoot(e, root) && segsOf(e).some(seg => folderTest(norm(seg))));
+    if (hits.length) return hits.slice(0, limit);
+  }
+  // Flat layout: documents sit directly under the shipment folder with no sub-folder.
+  // Identify them by filename instead (e.g. "CIPL 1 - WDC.2026... - SH_TH_US_CI.pdf").
+  if (nameTest) {
+    const pkKey = norm(pk);
+    for (const root of shipmentRoots(cw1, pk)) {
+      const hits = scanFiles.filter(e => underRoot(e, root) && nameTest(e))
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+      if (!hits.length) continue;
+      // If the PK value appears in the filename, prefer those files (exact link to this sub-shipment).
+      const byPk = pkKey.length >= 4 ? hits.filter(e => norm(e.name).includes(pkKey)) : [];
+      return (byPk.length ? byPk : hits).slice(0, limit);
+    }
+  }
+  return scanFiles
+    .filter(e => segsOf(e).some(seg => folderTest(norm(seg))) && keys.some(k => norm(e.name).includes(k)))
+    .slice(0, limit);
+}
+
+// TWB: "Road B_L - HAWB No_<number>.pdf" — match by number (digits), or by full CW1 inside the folder path.
+function matchTwb(cw1, pk) {
+  const keys = keysFor(cw1, pk);
+  const cw1n = norm(cw1);
   return scanFiles.filter(e => {
-    if (root && !e.lowerPath.startsWith(root + '/')) return false;
-    return folderSegments(e.lowerPath).some(folderTest);
+    const n = norm(e.name);
+    const isTwbName = n.includes('roadbl') || n.includes('hawb');
+    if (!isTwbName) return false;
+    if (keys.some(k => n.includes(k))) return true;
+    return cw1n.length >= 4 && segsOf(e).some(seg => norm(seg).includes(cw1n));
   });
 }
 
-function matchCipl(cw1, pk) {
-  const roots = findShipmentRootPaths(pk);
-  if (roots.length) {
-    for (const root of roots) {
-      const found = filesUnderRootInFolder(root, isCiplTh);
-      if (found.length) return found.slice(0, 2);
-    }
+// Candidate files the user can pick for a missing slot: unused PDFs under this shipment's roots.
+// For CIPL, prefer files that sit in a CIPL folder; CN folders are still offered but tagged.
+function candidatesFor(kind, cw1, pk, used) {
+  const roots = shipmentRoots(cw1, pk);
+  let pool = roots.length
+    ? scanFiles.filter(e => !used.has(e.path) && roots.some(r => underRoot(e, r)))
+    : scanFiles.filter(e => !used.has(e.path));
+  if (kind === 'cipl') {
+    const ciplPool = pool.filter(e => isCiplByName(e) || segsOf(e).some(seg => isCiplAny(norm(seg))));
+    if (ciplPool.length) pool = ciplPool;
   }
-  const key = (pk || cw1 || '').toLowerCase();
-  return scanFiles.filter(e => folderSegments(e.lowerPath).some(isCiplTh) && key && e.lowerPath.includes(key));
-}
-
-function matchInvoiceAttachment(cw1, pk) {
-  const roots = findShipmentRootPaths(pk);
-  if (roots.length) {
-    for (const root of roots) {
-      const found = filesUnderRootInFolder(root, isInvoiceAttachmentTh);
-      if (found.length) return found.slice(0, 1);
-    }
-  }
-  const key = (pk || cw1 || '').toLowerCase();
-  return scanFiles.filter(e => folderSegments(e.lowerPath).some(isInvoiceAttachmentTh) && key && e.lowerPath.includes(key)).slice(0, 1);
-}
-
-function matchTwb(cw1) {
-  const c = cw1.toLowerCase();
-  return scanFiles.filter(e => (e.lowerPath.includes('road b') || e.lowerPath.includes('hawb')) && e.lowerPath.includes(c));
+  return pool.slice(0, 12).map(e => ({
+    path: e.path, name: e.name, file: e.file,
+    cn: segsOf(e).some(seg => isCn(norm(seg)))
+  }));
 }
 
 /* ================= Build review / missing queues ================= */
 function buildQueues() {
+  // Remember manual uploads (by slot label) so they survive rebuilds.
   const prevCarry = {};
-  reviewQueue.forEach(s => { if (s.manual) prevCarry[s.label] = { name: s.name, file: s.file }; });
+  reviewQueue.forEach(s => {
+    if (s.manual && s.seq >= 0) prevCarry[s.label] = { name: s.name, file: s.file, path: s.path || null };
+  });
   manualCarryOver = { ...manualCarryOver, ...prevCarry };
 
   const shipments = getShipments();
   const review = [];
-  const missing = [];
+  const pending = [];   // slots with no automatic match and no manual upload yet
+  const used = new Set(); // scanned file paths already assigned somewhere
 
-  if (exportEntry) review.push({ id: crypto.randomUUID(), label: 'Export Entry (0409)', name: exportEntry.name, file: exportEntry.file });
-  if (goodsControl) review.push({ id: crypto.randomUUID(), label: 'Goods Control List', name: goodsControl.name, file: goodsControl.file });
+  // seq = canonical position: Export Entry, GCL, then per shipment: CIPL #1, #2, Invoice Attachment, TWB
+  if (exportEntry) review.push({ id: crypto.randomUUID(), seq: -2, label: 'Export Entry (0409)', name: exportEntry.name, file: exportEntry.file, manual: true });
+  if (goodsControl) review.push({ id: crypto.randomUUID(), seq: -1, label: 'Goods Control List', name: goodsControl.name, file: goodsControl.file, manual: true });
 
-  shipments.forEach(({ cw1, pk }) => {
-    const ciplFiles = matchCipl(cw1, pk);
-    if (ciplFiles.length === 0) {
-      for (let i = 1; i <= 2; i++) {
-        const label = `CIPL TH #${i} — Shipment ${cw1}`;
-        const carry = manualCarryOver[label];
-        if (carry) review.push({ id: crypto.randomUUID(), label, name: carry.name, file: carry.file, manual: true });
-        else missing.push({ id: crypto.randomUUID(), label });
-      }
+  const place = slot => {
+    const carry = manualCarryOver[slot.label];
+    if (carry) {
+      if (carry.path) used.add(carry.path);
+      review.push({ id: crypto.randomUUID(), seq: slot.seq, label: slot.label, name: carry.name, file: carry.file, path: carry.path || null, manual: true });
     } else {
-      ciplFiles.forEach(f => {
-        review.push({
-          id: crypto.randomUUID(),
-          label: `CIPL TH — Shipment ${cw1}${ciplFiles.length !== 2 ? ' (check count)' : ''}`,
-          name: f.name, file: f.file, warn: ciplFiles.length !== 2
-        });
+      pending.push(slot);
+    }
+  };
+
+  shipments.forEach(({ cw1, pk }, si) => {
+    const base = si * 10;
+
+    // CIPL TH (2 files)
+    const cipl = findDocs(cw1, pk, isCiplTh, 2, isCiplByName);
+    cipl.forEach((e, fi) => {
+      used.add(e.path);
+      review.push({
+        id: crypto.randomUUID(), seq: base + 1 + fi * 0.1,
+        label: `CIPL TH #${fi + 1} — Shipment ${cw1}`,
+        name: e.name, file: e.file, path: e.path
       });
+    });
+    for (let k = cipl.length + 1; k <= 2; k++) {
+      place({ kind: 'cipl', cw1, pk, seq: base + 1 + (k - 1) * 0.1, label: `CIPL TH #${k} — Shipment ${cw1}` });
     }
 
-    const invFiles = matchInvoiceAttachment(cw1, pk);
-    if (invFiles.length === 0) {
-      const label = `Invoice Attachment — Shipment ${cw1}`;
-      const carry = manualCarryOver[label];
-      if (carry) review.push({ id: crypto.randomUUID(), label, name: carry.name, file: carry.file, manual: true });
-      else missing.push({ id: crypto.randomUUID(), label });
+    // Invoice Attachment (1 file)
+    const inv = findDocs(cw1, pk, isInvoiceAttachmentTh, 1);
+    if (inv.length) {
+      used.add(inv[0].path);
+      review.push({ id: crypto.randomUUID(), seq: base + 2, label: `Invoice Attachment — Shipment ${cw1}`, name: inv[0].name, file: inv[0].file, path: inv[0].path });
     } else {
-      invFiles.forEach(f => review.push({ id: crypto.randomUUID(), label: `Invoice Attachment — Shipment ${cw1}`, name: f.name, file: f.file }));
+      place({ kind: 'inv', cw1, pk, seq: base + 2, label: `Invoice Attachment — Shipment ${cw1}` });
     }
 
-    const twbFiles = matchTwb(cw1);
-    if (twbFiles.length === 0) {
-      const label = `TWB — Shipment ${cw1}`;
-      const carry = manualCarryOver[label];
-      if (carry) review.push({ id: crypto.randomUUID(), label, name: carry.name, file: carry.file, manual: true });
-      else missing.push({ id: crypto.randomUUID(), label });
-    } else {
-      twbFiles.forEach(f => {
+    // TWB (1 file)
+    const twb = matchTwb(cw1, pk);
+    if (twb.length) {
+      twb.forEach(f => {
+        used.add(f.path);
         review.push({
-          id: crypto.randomUUID(),
-          label: `TWB — Shipment ${cw1}${twbFiles.length > 1 ? ' (multiple found)' : ''}`,
-          name: f.name, file: f.file, warn: twbFiles.length > 1
+          id: crypto.randomUUID(), seq: base + 3,
+          label: `TWB — Shipment ${cw1}${twb.length > 1 ? ' (multiple found)' : ''}`,
+          name: f.name, file: f.file, path: f.path, warn: twb.length > 1
         });
       });
+    } else {
+      place({ kind: 'twb', cw1, pk, seq: base + 3, label: `TWB — Shipment ${cw1}` });
     }
   });
 
+  // Candidates are computed last, once every automatic match is known, so a file is never offered twice.
+  pending.forEach(s => { s.candidates = candidatesFor(s.kind, s.cw1, s.pk, used); });
+
   reviewQueue = review;
-  missingQueue = missing;
+  missingQueue = pending.map(s => ({ id: crypto.randomUUID(), seq: s.seq, label: s.label, candidates: s.candidates }));
   renderReview();
   renderMissing();
   updateStepper();
+}
+
+/* Put a document back where it belongs: right before the first item whose seq is larger. */
+function insertBySeq(entry) {
+  const idx = reviewQueue.findIndex(s => typeof s.seq === 'number' && s.seq > entry.seq);
+  if (idx === -1) reviewQueue.push(entry);
+  else reviewQueue.splice(idx, 0, entry);
+}
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
 /* ================= Render review list ================= */
@@ -301,13 +375,14 @@ function renderReview() {
   reviewListEl.innerHTML = '';
   reviewQueue.forEach((slot, i) => {
     const row = document.createElement('div');
-    row.className = 'row';
+    row.className = 'row' + (slot.manual ? ' manual' : '');
     row.draggable = true;
     row.dataset.idx = i;
     row.innerHTML = `
       <span class="grip">⠿</span>
       <span class="idx">${i + 1}</span>
-      <span class="meta"><div class="lbl">${slot.label}</div><div class="fn">${slot.name}</div></span>
+      <span class="meta"><div class="lbl">${esc(slot.label)}</div><div class="fn" title="${esc(slot.path || slot.name)}">${esc(slot.name)}</div></span>
+      ${slot.manual ? '<span class="tag up-tag">uploaded</span>' : ''}
       ${slot.warn ? '<span class="tag">check</span>' : ''}
       <button class="remove" title="Remove">✕</button>
     `;
@@ -340,30 +415,37 @@ function renderReview() {
 const missingCard = document.getElementById('missingCard');
 const missingListEl = document.getElementById('missingList');
 
+function assignToSlot(slot, file, path) {
+  const entry = { id: crypto.randomUUID(), seq: slot.seq, label: slot.label, name: file.name, file, path: path || null, manual: true };
+  manualCarryOver[slot.label] = { name: file.name, file, path: path || null };
+  missingQueue = missingQueue.filter(s => s !== slot);
+  insertBySeq(entry);
+  renderReview();
+  renderMissing();
+  updateStepper();
+}
+
 function renderMissing() {
   missingCard.classList.toggle('hidden', missingQueue.length === 0);
   missingListEl.innerHTML = '';
-  missingQueue.forEach((slot, i) => {
-    const row = document.createElement('div');
-    row.className = 'row droppable';
-    row.innerHTML = `
-      <span class="meta">${slot.label} — not found in the scanned folder<br><small>drop a PDF here, or</small></span>
-      <button class="up">Browse…</button>
-      <input type="file" accept="application/pdf,.pdf" hidden>
+  missingQueue.forEach(slot => {
+    const wrap = document.createElement('div');
+    wrap.className = 'missing-item';
+    wrap.innerHTML = `
+      <div class="row droppable">
+        <span class="meta">${esc(slot.label)} — not found automatically<br><small>drop a PDF here, or</small></span>
+        <button class="up">Browse…</button>
+        <input type="file" accept="application/pdf,.pdf" hidden>
+      </div>
     `;
-    const btn = row.querySelector('.up');
-    const inp = row.querySelector('input');
+    const row = wrap.querySelector('.row');
+    const btn = wrap.querySelector('.up');
+    const inp = wrap.querySelector('input');
 
     function acceptFile(f) {
       if (!f || (f.type !== 'application/pdf' && !f.name.toLowerCase().endsWith('.pdf'))) return;
-      manualCarryOver[slot.label] = { name: f.name, file: f };
-      missingQueue.splice(i, 1);
-      reviewQueue.push({ id: crypto.randomUUID(), label: slot.label, name: f.name, file: f, manual: true });
-      renderReview();
-      renderMissing();
-      updateStepper();
+      assignToSlot(slot, f, null);
     }
-
     btn.addEventListener('click', () => inp.click());
     inp.addEventListener('change', e => acceptFile(e.target.files[0]));
     row.addEventListener('dragover', e => { e.preventDefault(); row.classList.add('dragover'); });
@@ -374,7 +456,23 @@ function renderMissing() {
       acceptFile(e.dataTransfer.files[0]);
     });
 
-    missingListEl.appendChild(row);
+    // Candidate files from the same shipment folder — one click to assign.
+    if (slot.candidates && slot.candidates.length) {
+      const box = document.createElement('div');
+      box.className = 'cands';
+      box.innerHTML = '<small>ไฟล์ที่พบในชุดของ shipment นี้ (กดเพื่อใช้):</small>';
+      slot.candidates.forEach(c => {
+        const b = document.createElement('button');
+        b.className = 'cand-btn' + (c.cn ? ' cn' : '');
+        b.title = c.path + (c.cn ? '  (CN folder — check before using)' : '');
+        b.textContent = (c.cn ? '⚠ ' : '') + c.name;
+        b.addEventListener('click', () => assignToSlot(slot, c.file, c.path));
+        box.appendChild(b);
+      });
+      wrap.appendChild(box);
+    }
+
+    missingListEl.appendChild(wrap);
   });
 }
 
@@ -494,7 +592,7 @@ async function doMerge(outputName) {
         loadedBytes.push(await readFileWithRetry(slot.file));
       } catch (err) {
         readFailures.push(slot.label);
-        missingQueue.push({ id: crypto.randomUUID(), label: slot.label });
+        missingQueue.push({ id: crypto.randomUUID(), seq: slot.seq, label: slot.label });
       }
     }
 

@@ -3,18 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Completed set - 0409</title>
-  
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../style.css">
-<link rel="stylesheet" href="../theme.css">
+  <title>THLC PDF Merge Center</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="stylesheet" href="../theme.css">
 </head>
 <body>
+<header class="topbar">
+  <a class="back" href="../index.html">← Portal</a>
+  <div class="brand"><span class="brand-mark">TH</span><div><b>THLC</b><small>PDF MERGE CENTER</small></div></div>
+  <div class="status-pill"><i></i> Browser-only processing</div>
+</header>
+
 <main class="shell">
   <section class="hero">
     <div>
       <p class="eyebrow">CUSTOMS DOCUMENT WORKFLOW</p>
-      <h1>Completed set<br><span>- 0409</span></h1>
+      <h1>Shipment PDF<br><span>Merge Center</span></h1>
       <p class="hero-copy">Build a complete customs document pack from shipment folders, verify every required PDF, arrange the sequence, and merge locally in your browser.</p>
     </div>
   </section>
@@ -81,15 +85,17 @@
     <div id="missingList"></div>
   </section>
 
-  <section class="merge-bar">
-    <div class="license-info">
-      <span class="lock">▣</span>
-      <div><strong>THLC License</strong><small id="licenseName">Always appended as the final PDF — locked, cannot be reordered</small></div>
-    </div>
-    <label class="btn btn-outline btn-sm">Replace license<input id="licenseInput" type="file" accept="application/pdf,.pdf" hidden></label>
-    <button class="btn btn-primary" id="mergeBtn">Merge PDF <span>→</span></button>
-  </section>
-  <p class="merge-status" id="mergeStatus"></p>
+  <div class="merge-dock">
+    <p class="merge-status" id="mergeStatus"></p>
+    <section class="merge-bar">
+      <div class="license-info">
+        <span class="lock">▣</span>
+        <div><strong>THLC License</strong><small id="licenseName">Always appended as the final PDF — locked, cannot be reordered</small></div>
+      </div>
+      <label class="btn btn-outline btn-sm">Replace license<input id="licenseInput" type="file" accept="application/pdf,.pdf" hidden></label>
+      <button class="btn btn-primary" id="mergeBtn">Merge PDF <span>→</span></button>
+    </section>
+  </div>
 </main>
 
 <div class="modal hidden" id="nameModal">
